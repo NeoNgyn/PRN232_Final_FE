@@ -1,0 +1,47 @@
+# --------------------- GITHUB RULESET: NOPUSHTOMAIN ---------------------
+# Description:
+# Cấm push trực tiếp hoặc force-push vào nhánh chính.
+# Mọi thay đổi phải qua Pull Request (tự merge PR của mình được).
+# Chỉ áp dụng cho nhánh mặc định, không yêu cầu CI/CD hay commit ký GPG.
+# GitHub Actions được phép bypass.
+# ------------------------------------------------------------------------
+
+name: NoPushToMain
+enforcement: active
+target: branch
+
+# --------------------- TARGET BRANCH ---------------------
+# NOTE: Workflow sẽ tự patch dòng include này = refs/heads/<default_branch>.
+conditions:
+  ref_name:
+    include:
+      - refs/heads/main
+    exclude: []
+
+# --------------------- BYPASS SETTINGS ---------------------
+bypass_actors:
+  - actor_id: 15368        # app/github-actions
+    actor_type: Integration
+
+# --------------------- RULES ---------------------
+rules:
+  # --------------------- RESTRICT PUSH ---------------------
+  - type: restrict_pushes
+    parameters:
+      allowed_user_push_actors: []
+      allowed_team_push_actors: []
+      allowed_app_push_actors: []
+
+  # --------------------- REQUIRE PR (NO APPROVAL REQUIRED) ---------------------
+  - type: pull_request
+    parameters:
+      require_code_owner_review: false
+      required_approving_review_count: 0
+      dismiss_stale_reviews_on_push: false
+      require_last_push_approval: false
+
+  # --------------------- BLOCK FORCE PUSH ---------------------
+  - type: non_fast_forward
+
+  # --------------------- BLOCK DELETION ---------------------
+  - type: deletion

@@ -1,0 +1,150 @@
+name: 🚀 Apply GitHub Ruleset
+on:
+  # --------------------- WORKFLOW TRIGGERS ---------------------
+  push:
+    branches: [ main ]
+    paths:
+      - ".github/ruleset.yml"
+      - ".github/workflows/apply-ruleset.yml"
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "apply = create/update | check-only = validate only"
+        required: true
+        default: "apply"
+        type: choice
+        options: [ apply, check-only ]
+      reason:
+        description: "Optional note for manual run"
+        required: false
+        default: "Manual run"
+
+jobs:
+  apply-ruleset:
+    runs-on: ubuntu-latest
+    permissions:
+      # --------------------- MINIMAL PERMISSIONS ---------------------
+      contents: write
+
+    steps:
+      # --------------------- SETUP ---------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh jq diffutils
+          gh --version
+
+      - name: Install yq
+        run: |
+          sudo wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+          yq --version
+
+      - name: Authenticate GitHub CLI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git
+          gh auth status
+
+      # --------------------- GET DEFAULT BRANCH ---------------------
+      - name: Get default branch
+        id: get_branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          default_branch=$(gh api -H "Accept: application/vnd.github+json" /repos/$OWNER/$REPO --jq '.default_branch')
+          echo "default_branch=$default_branch" >> $GITHUB_OUTPUT
+
+      # --------------------- PATCH RULESET.YML ---------------------
+      - name: Patch ruleset.yml
+        run: |
+          default_branch="${{ steps.get_branch.outputs.default_branch }}"
+          echo "Default branch: $default_branch"
+          # thay đúng dòng include đầu tiên có 'refs/heads/'
+          awk -v b="$default_branch" '
+            /refs\/heads\// && !done { sub(/refs\/heads\/[^"]+/, "refs/heads/" b); done=1 } { print }
+          ' .github/ruleset.yml > .github/ruleset.patched.yml
+          mv .github/ruleset.patched.yml .github/ruleset.yml
+          cat .github/ruleset.yml
+
+      # --------------------- CHECK CURRENT VS EXISTING ---------------------
+      - name: Check current vs existing ruleset
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          file=".github/ruleset.yml"
+          ruleset_id=$(gh api -H "Accept: application/vnd.github+json" /repos/$OWNER/$REPO/rulesets --jq '.[] | select(.name=="NoPushToMain") | .id' 2>/dev/null || true)
+          echo "ruleset_id=$ruleset_id" >> $GITHUB_OUTPUT
+
+          if [ -z "$ruleset_id" ]; then
+            echo "Ruleset not found -> needs update."
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          else
+            gh api -H "Accept: application/vnd.github+json" /repos/$OWNER/$REPO/rulesets/$ruleset_id > current.json
+            jq -S . current.json > current_sorted.json
+            yq -o=json '.' "$file" | jq -S . > new_sorted.json
+            if diff -q current_sorted.json new_sorted.json > /dev/null; then
+              echo "Up-to-date."
+              echo "needs_update=false" >> $GITHUB_OUTPUT
+            else
+              echo "Different -> needs update."
+              echo "needs_update=true" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      # --------------------- MODE: CHECK-ONLY ---------------------
+      - name: Validate only
+        if: ${{ github.event.inputs.mode == 'check-only' }}
+        run: |
+          echo "MODE = CHECK-ONLY"
+          if [ "${{ steps.check.outputs.needs_update }}" = "true" ]; then
+            echo "Ruleset needs update."
+            exit 1
+          else
+            echo "Ruleset matches YAML."
+          fi
+
+      # --------------------- MODE: APPLY ---------------------
+      - name: Apply or update ruleset
+        if: ${{ github.event.inputs.mode == 'apply' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          if [ "${{ steps.check.outputs.needs_update }}" = "false" ]; then
+            echo "No update required."
+            exit 0
+          fi
+
+          file=".github/ruleset.yml"
+          ruleset_id="${{ steps.check.outputs.ruleset_id }}"
+          if [ -z "$ruleset_id" ]; then
+            echo "Creating ruleset..."
+            yq -o=json '.' "$file" | \
+            gh api --method POST -H "Accept: application/vnd.github+json" /repos/$OWNER/$REPO/rulesets --input -
+          else
+            echo "Updating ruleset id=$ruleset_id..."
+            yq -o=json '.' "$file" | \
+            gh api --method PATCH -H "Accept: application/vnd.github+json" /repos/$OWNER/$REPO/rulesets/$ruleset_id --input -
+          fi
+
+      # --------------------- VERIFY ---------------------
+      - name: Verify ruleset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          gh api -H "Accept: application/vnd.github+json" /repos/$OWNER/$REPO/rulesets \
+            --jq '.[] | {id, name, enforcement, branches: .conditions.ref_name.include}'
