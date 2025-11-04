@@ -1,0 +1,148 @@
+.teacher-dashboard {
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+.exams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.exam-card {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.exam-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  border-color: #667eea;
+}
+
+.exam-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.exam-badge {
+  background: white;
+  color: #667eea;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.exam-semester {
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.exam-body {
+  padding: 24px;
+}
+
+.exam-body h3 {
+  color: #2d3748;
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.exam-name {
+  color: #718096;
+  font-size: 14px;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.exam-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f7fafc;
+  border-radius: 8px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  color: #718096;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.stat-value {
+  color: #2d3748;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.progress-section {
+  margin-top: 20px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #4a5568;
+}
+
+.progress-percent {
+  font-weight: 700;
+  color: #667eea;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+.exam-footer {
+  padding: 0 24px 24px;
+}
+
+.btn-grade {
+  width: 100%;
+  justify-content: center;
+  padding: 14px;
+  font-size: 16px;
+}
+
+.exams-icon {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.students-icon {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.graded-icon {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
