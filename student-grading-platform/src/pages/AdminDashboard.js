@@ -4,34 +4,7 @@ import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import './AdminDashboard.css';
 
-// Mock data
-const initialSubjects = [
-  { id: 1, code: 'SWD392', name: 'Software Architecture and Design' },
-  { id: 2, code: 'PRN231', name: 'Building Cross-Platform Applications' },
-];
-
-const initialExams = [
-  { 
-    id: 1, 
-    subjectId: 1, 
-    semester: 'SU25', 
-    type: 'PE', 
-    slot: 1,
-    teacherId: 2,
-    gradingCriteria: [],
-    students: [] // Danh sách học sinh và file bài làm
-  },
-];
-
-const initialTeachers = [
-  { id: 2, name: 'Nguyễn Văn A', email: 'teacher1@fpt.edu.vn' },
-  { id: 3, name: 'Trần Thị B', email: 'teacher2@fpt.edu.vn' },
-];
-
-function AdminDashboard({ user, onLogout }) {
-  const [subjects, setSubjects] = useState(initialSubjects);
-  const [exams, setExams] = useState(initialExams);
-  const [teachers] = useState(initialTeachers);
+function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams, teachers }) {
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
   const [showCriteriaModal, setShowCriteriaModal] = useState(false);
@@ -121,9 +94,10 @@ function AdminDashboard({ user, onLogout }) {
           examType = parts[2].toUpperCase();
         }
         
-        // Lấy tên sinh viên (từ sau semester/examType đến trước MSSV)
-        let nameStartIndex = 3;
-        const studentName = parts.slice(nameStartIndex, studentIdIndex).join(' ');
+        // Lấy tên sinh viên (từ SAU MSSV đến hết)
+        // VD: SWD392_PE_SU25_SE184696_NguyenPhucNhan
+        // studentIdIndex = 3, tên = parts[4] trở đi
+        const studentName = parts.slice(studentIdIndex + 1).join(' ');
         
         return {
           subject: parts[0],
@@ -225,28 +199,62 @@ function AdminDashboard({ user, onLogout }) {
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const data = new Uint8Array(event.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      try {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      const criteria = jsonData.map((row, index) => ({
-        id: index + 1,
-        name: row['Tiêu chí'] || row['Criteria'] || row['Name'] || `Tiêu chí ${index + 1}`,
-        maxScore: parseFloat(row['Điểm tối đa'] || row['Max Score'] || row['Score'] || 10),
-        description: row['Mô tả'] || row['Description'] || ''
-      }));
+        console.log('Excel data:', jsonData);
+        
+        if (jsonData.length === 0) {
+          alert('File Excel trống hoặc không đúng định dạng!');
+          return;
+        }
 
-      setExams(exams.map(exam => 
-        exam.id === selectedExam.id 
-          ? { ...exam, gradingCriteria: criteria }
-          : exam
-      ));
+        // Log first row to see column names
+        console.log('First row columns:', Object.keys(jsonData[0]));
 
-      alert(`Đã import ${criteria.length} tiêu chí chấm điểm!`);
-      setShowCriteriaModal(false);
-      setSelectedExam(null);
+        const criteria = jsonData.map((row, index) => {
+          // Hỗ trợ nhiều tên cột khác nhau
+          const name = row['Tiêu chí'] || row['Criteria'] || row['Name'] || 
+                      row['Tieu chi'] || row['name'] || row['criteria'] || 
+                      row['Tiêu Chí'] || row['TieuChi'] || `Tiêu chí ${index + 1}`;
+          
+          const maxScore = parseFloat(
+            row['Điểm tối đa'] || row['Max Score'] || row['Score'] || 
+            row['Diem toi da'] || row['MaxScore'] || row['score'] ||
+            row['Điểm'] || row['Diem'] || row['max_score'] || 10
+          );
+          
+          const description = row['Mô tả'] || row['Description'] || 
+                            row['Mo ta'] || row['description'] || 
+                            row['Mô Tả'] || row['MoTa'] || '';
+
+          return {
+            id: index + 1,
+            name: name,
+            maxScore: maxScore,
+            description: description
+          };
+        });
+
+        console.log('Parsed criteria:', criteria);
+
+        setExams(exams.map(exam => 
+          exam.id === selectedExam.id 
+            ? { ...exam, gradingCriteria: criteria }
+            : exam
+        ));
+
+        alert(`Đã import ${criteria.length} tiêu chí chấm điểm!`);
+        setShowCriteriaModal(false);
+        setSelectedExam(null);
+      } catch (error) {
+        console.error('Error importing Excel:', error);
+        alert('Lỗi khi đọc file Excel: ' + error.message);
+      }
     };
     reader.readAsArrayBuffer(file);
   };

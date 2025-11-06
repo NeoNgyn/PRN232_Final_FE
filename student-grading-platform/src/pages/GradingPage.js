@@ -1,142 +1,96 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, FileText, Save, CheckCircle, 
   AlertCircle, ChevronLeft, ChevronRight 
 } from 'lucide-react';
+import mammoth from 'mammoth';
 import './GradingPage.css';
 
-// Mock data
-const mockExamData = {
-  1: {
-    id: 1,
-    subject: { code: 'SWD392', name: 'Software Architecture and Design' },
-    semester: 'SU25',
-    type: 'PE',
-    slot: 1,
-    gradingCriteria: [
-      { id: 1, name: 'Thiết kế kiến trúc hệ thống', maxScore: 2, description: 'Đánh giá khả năng thiết kế kiến trúc' },
-      { id: 2, name: 'Code quality và convention', maxScore: 2, description: 'Đánh giá chất lượng code' },
-      { id: 3, name: 'Implement features', maxScore: 3, description: 'Triển khai các tính năng' },
-      { id: 4, name: 'Database design', maxScore: 2, description: 'Thiết kế cơ sở dữ liệu' },
-      { id: 5, name: 'Documentation', maxScore: 1, description: 'Tài liệu hướng dẫn' },
-    ],
-    students: [
-      {
-        id: 1,
-        studentId: 'SE161572',
-        studentName: 'Vu Trung Tin',
-        password: '358715',
-        fileName: 'SWD392_SU25_PE_1_358715_Vu Trung Tin_SE161572.docx',
-        uploadedAt: new Date().toISOString(),
-        graded: false
-      },
-      {
-        id: 2,
-        studentId: 'SE161573',
-        studentName: 'Nguyen Van A',
-        password: '358716',
-        fileName: 'SWD392_SU25_PE_1_358716_Nguyen Van A_SE161573.docx',
-        uploadedAt: new Date().toISOString(),
-        graded: true,
-        totalScore: 8.5
-      },
-      {
-        id: 3,
-        studentId: 'SE184696',
-        studentName: 'NguyenPhucNhan',
-        password: '000000',
-        fileName: 'SWD392_PE_SU25_SE184696_NguyenPhucNhan.docx',
-        uploadedAt: new Date().toISOString(),
-        graded: false
-      },
-      {
-        id: 4,
-        studentId: 'SE184557',
-        studentName: 'MaiHaiNam',
-        password: '000000',
-        fileName: 'SWD392_PE_SU25_SE184557_MaiHaiNam.docx',
-        uploadedAt: new Date().toISOString(),
-        graded: false
-      },
-    ],
-  },
-};
-
-function GradingPage({ user, onLogout }) {
+function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   const { examId } = useParams();
   const navigate = useNavigate();
-  const exam = mockExamData[examId];
+  const exam = exams.find(e => e.id === parseInt(examId));
   
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [scores, setScores] = useState({});
   const [notes, setNotes] = useState({});
   const [gradedSubmissions, setGradedSubmissions] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [documentContent, setDocumentContent] = useState('');
+  const [isLoadingDocument, setIsLoadingDocument] = useState(false);
+
+  // Load document content from Blob when student is selected
+  const loadDocumentContent = async (student) => {
+    if (!student || !student.fileBlob) {
+      setDocumentContent('');
+      return;
+    }
+
+    setIsLoadingDocument(true);
+    setDocumentContent('');
+    
+    try {
+      const arrayBuffer = await student.fileBlob.arrayBuffer();
+      
+      // Options for mammoth conversion
+      const options = {
+        convertImage: mammoth.images.imgElement(function(image) {
+          return image.read("base64").then(function(imageBuffer) {
+            return {
+              src: "data:" + image.contentType + ";base64," + imageBuffer,
+              alt: image.altText || "Image"
+            };
+          }).catch(function(err) {
+            console.error('Error converting image:', err);
+            return {
+              src: "",
+              alt: "[Image could not be loaded]"
+            };
+          });
+        }),
+        styleMap: [
+          "p[style-name='Heading 1'] => h1",
+          "p[style-name='Heading 2'] => h2",
+          "p[style-name='Heading 3'] => h3",
+          "b => strong",
+          "i => em"
+        ]
+      };
+      
+      // Convert to HTML with images and styling
+      const result = await mammoth.convertToHtml({ arrayBuffer }, options);
+      
+      setDocumentContent(result.value);
+      
+      // Log conversion info
+      console.log('Document loaded. HTML length:', result.value.length);
+      if (result.messages && result.messages.length > 0) {
+        console.log('Conversion messages:', result.messages);
+      }
+    } catch (error) {
+      console.error('Error reading document:', error);
+      setDocumentContent('<p style="color: #e53e3e;">Không thể đọc nội dung file. Vui lòng kiểm tra định dạng file.</p>');
+    } finally {
+      setIsLoadingDocument(false);
+    }
+  };
+
+  // Load document when selected student changes
+  useEffect(() => {
+    if (selectedStudent) {
+      loadDocumentContent(selectedStudent);
+    } else {
+      setDocumentContent('');
+    }
+  }, [selectedStudent]);
 
   if (!exam) {
     return <div>Exam not found</div>;
   }
 
-  // Parse filename: Support multiple formats
-  // Format 1: SWD392_SU25_PE_1_358715_Vu Trung Tin_SE161572.docx (đầy đủ)
-  // Format 2: SWD392_PE_SU25_SE184696_NguyenPhucNhan.docx (ngắn gọn)
-  const parseFileName = (fileName) => {
-    const cleanName = fileName.replace('.docx', '').replace('.doc', '');
-    const parts = cleanName.split('_');
-    
-    // Format 1: SWD392_SU25_PE_1_358715_Vu Trung Tin_SE161572
-    if (parts.length >= 7 && parts[3].match(/^\d+$/)) {
-      return {
-        subject: parts[0],
-        semester: parts[1],
-        examType: parts[2],
-        slot: parseInt(parts[3]),
-        password: parts[4],
-        studentName: parts.slice(5, parts.length - 1).join(' '),
-        studentId: parts[parts.length - 1],
-      };
-    }
-    
-    // Format 2: SWD392_PE_SU25_SE184696_NguyenPhucNhan
-    if (parts.length >= 4) {
-      let studentIdIndex = -1;
-      for (let i = parts.length - 1; i >= 0; i--) {
-        if (parts[i].match(/^(SE|HE|SS|HS|GD|AI)\d+$/i)) {
-          studentIdIndex = i;
-          break;
-        }
-      }
-      
-      if (studentIdIndex !== -1) {
-        let semester = '';
-        let examType = '';
-        
-        if (parts[1].match(/^(PE|FE|TE)$/i)) {
-          examType = parts[1].toUpperCase();
-          semester = parts[2];
-        } else if (parts[2].match(/^(PE|FE|TE)$/i)) {
-          semester = parts[1];
-          examType = parts[2].toUpperCase();
-        }
-        
-        let nameStartIndex = 3;
-        const studentName = parts.slice(nameStartIndex, studentIdIndex).join(' ');
-        
-        return {
-          subject: parts[0],
-          semester: semester,
-          examType: examType,
-          slot: 1,
-          password: '000000',
-          studentName: studentName || 'Unknown',
-          studentId: parts[studentIdIndex],
-        };
-      }
-    }
-    
-    return null;
-  };
+  // Get subject info
+  const subject = subjects.find(s => s.id === exam.subjectId);
 
   const handleSelectStudent = (student) => {
     setSelectedStudent(student);
@@ -177,7 +131,7 @@ function GradingPage({ user, onLogout }) {
     const gradingResult = {
       studentId: selectedStudent.studentId,
       studentName: selectedStudent.studentName,
-      subject: exam.subject.code,
+      subject: subject?.code || 'N/A',
       semester: exam.semester,
       examType: exam.type,
       password: selectedStudent.password,
@@ -190,13 +144,20 @@ function GradingPage({ user, onLogout }) {
 
     setGradedSubmissions([...gradedSubmissions, gradingResult]);
     
-    // Update student as graded
-    const updatedStudents = exam.students.map(s => 
-      s.id === selectedStudent.id 
-        ? { ...s, graded: true, totalScore: calculateTotalScore() }
-        : s
-    );
-    exam.students = updatedStudents;
+    // Update student as graded in the exams state
+    setExams(exams.map(e => {
+      if (e.id === exam.id) {
+        return {
+          ...e,
+          students: e.students.map(s => 
+            s.id === selectedStudent.id 
+              ? { ...s, graded: true, totalScore: calculateTotalScore() }
+              : s
+          )
+        };
+      }
+      return e;
+    }));
     
     setShowSuccess(true);
     
@@ -209,7 +170,7 @@ function GradingPage({ user, onLogout }) {
   };
 
   const handlePreviousFile = () => {
-    const currentIndex = exam.students.findIndex(s => s.id === selectedStudent?.id);
+    const currentIndex = exam.students?.findIndex(s => s.id === selectedStudent?.id) || 0;
     if (currentIndex > 0) {
       setSelectedStudent(exam.students[currentIndex - 1]);
       setScores({});
@@ -218,15 +179,15 @@ function GradingPage({ user, onLogout }) {
   };
 
   const handleNextFile = () => {
-    const currentIndex = exam.students.findIndex(s => s.id === selectedStudent?.id);
-    if (currentIndex < exam.students.length - 1) {
+    const currentIndex = exam.students?.findIndex(s => s.id === selectedStudent?.id) || 0;
+    if (currentIndex < (exam.students?.length || 0) - 1) {
       setSelectedStudent(exam.students[currentIndex + 1]);
       setScores({});
       setNotes({});
     }
   };
 
-  const totalMaxScore = exam.gradingCriteria.reduce((sum, c) => sum + c.maxScore, 0);
+  const totalMaxScore = exam.gradingCriteria?.reduce((sum, c) => sum + c.maxScore, 0) || 0;
 
   return (
     <div className="grading-page">
@@ -236,8 +197,8 @@ function GradingPage({ user, onLogout }) {
           Quay lại
         </button>
         <div className="header-info">
-          <h1>{exam.subject.code} - {exam.semester} ({exam.type})</h1>
-          <p>{exam.subject.name}</p>
+          <h1>{subject?.code || 'N/A'} - {exam.semester} ({exam.type})</h1>
+          <p>{subject?.name || 'N/A'}</p>
         </div>
       </div>
 
@@ -324,7 +285,7 @@ function GradingPage({ user, onLogout }) {
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Môn thi:</span>
-                    <span className="detail-value">{exam.subject.code}</span>
+                    <span className="detail-value">{subject?.code || 'N/A'}</span>
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Kỳ thi:</span>
@@ -353,18 +314,18 @@ function GradingPage({ user, onLogout }) {
               <div className="file-navigation">
                 <button
                   onClick={handlePreviousFile}
-                  disabled={exam.students.findIndex(s => s.id === selectedStudent.id) === 0}
+                  disabled={(exam.students?.findIndex(s => s.id === selectedStudent.id) || 0) === 0}
                   className="btn btn-secondary"
                 >
                   <ChevronLeft size={18} />
                   Sinh viên trước
                 </button>
                 <span className="file-counter">
-                  {exam.students.findIndex(s => s.id === selectedStudent.id) + 1} / {exam.students.length}
+                  {(exam.students?.findIndex(s => s.id === selectedStudent.id) || 0) + 1} / {exam.students?.length || 0}
                 </span>
                 <button
                   onClick={handleNextFile}
-                  disabled={exam.students.findIndex(s => s.id === selectedStudent.id) === exam.students.length - 1}
+                  disabled={(exam.students?.findIndex(s => s.id === selectedStudent.id) || 0) === (exam.students?.length || 0) - 1}
                   className="btn btn-secondary"
                 >
                   Sinh viên sau
@@ -377,14 +338,31 @@ function GradingPage({ user, onLogout }) {
                   <FileText size={24} />
                   <h3>Bài làm sinh viên</h3>
                 </div>
-                <div className="document-placeholder">
-                  <FileText size={48} />
-                  <p>Xem bài làm trong file:</p>
-                  <p className="file-name">{selectedStudent.fileName}</p>
-                  <p className="note">
-                    (Trong môi trường thực tế, bài làm sẽ được hiển thị ở đây)
-                  </p>
-                </div>
+                {isLoadingDocument ? (
+                  <div className="document-placeholder">
+                    <div className="loading-spinner"></div>
+                    <p>Đang tải nội dung file...</p>
+                  </div>
+                ) : documentContent ? (
+                  <div className="document-content">
+                    <div className="document-meta">
+                      <FileText size={16} />
+                      <span>{selectedStudent.fileName}</span>
+                    </div>
+                    <div 
+                      className="document-text"
+                      dangerouslySetInnerHTML={{ __html: documentContent }}
+                    />
+                  </div>
+                ) : (
+                  <div className="document-placeholder">
+                    <FileText size={48} />
+                    <p>Không có nội dung để hiển thị</p>
+                    <p className="note">
+                      File có thể trống hoặc định dạng không được hỗ trợ
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
