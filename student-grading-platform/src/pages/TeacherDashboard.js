@@ -10,6 +10,7 @@ const mockAssignedExams = [
     subject: { code: 'SWD392', name: 'Software Architecture and Design' },
     semester: 'SU25',
     type: 'PE',
+    slot: 1,
     gradingCriteria: [
       { id: 1, name: 'Thiết kế kiến trúc hệ thống', maxScore: 2, description: 'Đánh giá khả năng thiết kế kiến trúc' },
       { id: 2, name: 'Code quality và convention', maxScore: 2, description: 'Đánh giá chất lượng code' },
@@ -17,14 +18,54 @@ const mockAssignedExams = [
       { id: 4, name: 'Database design', maxScore: 2, description: 'Thiết kế cơ sở dữ liệu' },
       { id: 5, name: 'Documentation', maxScore: 1, description: 'Tài liệu hướng dẫn' },
     ],
-    submittedStudents: 15,
-    gradedStudents: 8,
+    students: [
+      {
+        id: 1,
+        studentId: 'SE161572',
+        studentName: 'Vu Trung Tin',
+        password: '358715',
+        fileName: 'SWD392_SU25_PE_1_358715_Vu Trung Tin_SE161572.docx',
+        uploadedAt: new Date().toISOString(),
+        graded: false
+      },
+      {
+        id: 2,
+        studentId: 'SE161573',
+        studentName: 'Nguyen Van A',
+        password: '358716',
+        fileName: 'SWD392_SU25_PE_1_358716_Nguyen Van A_SE161573.docx',
+        uploadedAt: new Date().toISOString(),
+        graded: true,
+        totalScore: 8.5
+      },
+      {
+        id: 3,
+        studentId: 'SE184696',
+        studentName: 'NguyenPhucNhan',
+        password: '000000',
+        fileName: 'SWD392_PE_SU25_SE184696_NguyenPhucNhan.docx',
+        uploadedAt: new Date().toISOString(),
+        graded: false
+      },
+      {
+        id: 4,
+        studentId: 'SE184557',
+        studentName: 'MaiHaiNam',
+        password: '000000',
+        fileName: 'SWD392_PE_SU25_SE184557_MaiHaiNam.docx',
+        uploadedAt: new Date().toISOString(),
+        graded: false
+      },
+    ],
+    submittedStudents: 4,
+    gradedStudents: 1,
   },
   {
     id: 2,
     subject: { code: 'PRN231', name: 'Building Cross-Platform Applications' },
     semester: 'SU25',
     type: 'PE',
+    slot: 2,
     gradingCriteria: [
       { id: 1, name: 'UI/UX Design', maxScore: 2.5, description: 'Giao diện người dùng' },
       { id: 2, name: 'API Integration', maxScore: 2.5, description: 'Tích hợp API' },
@@ -32,8 +73,9 @@ const mockAssignedExams = [
       { id: 4, name: 'Performance', maxScore: 2, description: 'Hiệu năng ứng dụng' },
       { id: 5, name: 'Code Structure', maxScore: 1, description: 'Cấu trúc code' },
     ],
-    submittedStudents: 20,
-    gradedStudents: 12,
+    students: [],
+    submittedStudents: 0,
+    gradedStudents: 0,
   },
 ];
 
@@ -119,6 +161,7 @@ function TeacherDashboard({ user, onLogout }) {
                 <div className="exam-body">
                   <h3>{exam.subject.code}</h3>
                   <p className="exam-name">{exam.subject.name}</p>
+                  <p className="exam-slot">Slot {exam.slot}</p>
                   
                   <div className="exam-stats">
                     <div className="stat-item">

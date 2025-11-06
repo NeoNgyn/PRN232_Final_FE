@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Upload, FileText, Save, CheckCircle, 
+  ArrowLeft, FileText, Save, CheckCircle, 
   AlertCircle, ChevronLeft, ChevronRight 
 } from 'lucide-react';
 import './GradingPage.css';
@@ -13,6 +13,7 @@ const mockExamData = {
     subject: { code: 'SWD392', name: 'Software Architecture and Design' },
     semester: 'SU25',
     type: 'PE',
+    slot: 1,
     gradingCriteria: [
       { id: 1, name: 'Thiết kế kiến trúc hệ thống', maxScore: 2, description: 'Đánh giá khả năng thiết kế kiến trúc' },
       { id: 2, name: 'Code quality và convention', maxScore: 2, description: 'Đánh giá chất lượng code' },
@@ -20,57 +21,125 @@ const mockExamData = {
       { id: 4, name: 'Database design', maxScore: 2, description: 'Thiết kế cơ sở dữ liệu' },
       { id: 5, name: 'Documentation', maxScore: 1, description: 'Tài liệu hướng dẫn' },
     ],
+    students: [
+      {
+        id: 1,
+        studentId: 'SE161572',
+        studentName: 'Vu Trung Tin',
+        password: '358715',
+        fileName: 'SWD392_SU25_PE_1_358715_Vu Trung Tin_SE161572.docx',
+        uploadedAt: new Date().toISOString(),
+        graded: false
+      },
+      {
+        id: 2,
+        studentId: 'SE161573',
+        studentName: 'Nguyen Van A',
+        password: '358716',
+        fileName: 'SWD392_SU25_PE_1_358716_Nguyen Van A_SE161573.docx',
+        uploadedAt: new Date().toISOString(),
+        graded: true,
+        totalScore: 8.5
+      },
+      {
+        id: 3,
+        studentId: 'SE184696',
+        studentName: 'NguyenPhucNhan',
+        password: '000000',
+        fileName: 'SWD392_PE_SU25_SE184696_NguyenPhucNhan.docx',
+        uploadedAt: new Date().toISOString(),
+        graded: false
+      },
+      {
+        id: 4,
+        studentId: 'SE184557',
+        studentName: 'MaiHaiNam',
+        password: '000000',
+        fileName: 'SWD392_PE_SU25_SE184557_MaiHaiNam.docx',
+        uploadedAt: new Date().toISOString(),
+        graded: false
+      },
+    ],
   },
 };
-
-// Mock graded submissions
-const initialGradedSubmissions = [];
 
 function GradingPage({ user, onLogout }) {
   const { examId } = useParams();
   const navigate = useNavigate();
   const exam = mockExamData[examId];
   
-  const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const [selectedStudent, setSelectedStudent] = useState(null);
   const [scores, setScores] = useState({});
   const [notes, setNotes] = useState({});
-  const [gradedSubmissions, setGradedSubmissions] = useState(initialGradedSubmissions);
+  const [gradedSubmissions, setGradedSubmissions] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
 
   if (!exam) {
     return <div>Exam not found</div>;
   }
 
+  // Parse filename: Support multiple formats
+  // Format 1: SWD392_SU25_PE_1_358715_Vu Trung Tin_SE161572.docx (đầy đủ)
+  // Format 2: SWD392_PE_SU25_SE184696_NguyenPhucNhan.docx (ngắn gọn)
   const parseFileName = (fileName) => {
-    // Format: SWD392_SU25_PE_1_358715_Vu Trung Tin_SE161572.docx
-    const parts = fileName.replace('.docx', '').replace('.doc', '').split('_');
-    if (parts.length >= 7) {
+    const cleanName = fileName.replace('.docx', '').replace('.doc', '');
+    const parts = cleanName.split('_');
+    
+    // Format 1: SWD392_SU25_PE_1_358715_Vu Trung Tin_SE161572
+    if (parts.length >= 7 && parts[3].match(/^\d+$/)) {
       return {
         subject: parts[0],
         semester: parts[1],
         examType: parts[2],
-        slot: parts[3],
+        slot: parseInt(parts[3]),
         password: parts[4],
         studentName: parts.slice(5, parts.length - 1).join(' '),
         studentId: parts[parts.length - 1],
       };
     }
+    
+    // Format 2: SWD392_PE_SU25_SE184696_NguyenPhucNhan
+    if (parts.length >= 4) {
+      let studentIdIndex = -1;
+      for (let i = parts.length - 1; i >= 0; i--) {
+        if (parts[i].match(/^(SE|HE|SS|HS|GD|AI)\d+$/i)) {
+          studentIdIndex = i;
+          break;
+        }
+      }
+      
+      if (studentIdIndex !== -1) {
+        let semester = '';
+        let examType = '';
+        
+        if (parts[1].match(/^(PE|FE|TE)$/i)) {
+          examType = parts[1].toUpperCase();
+          semester = parts[2];
+        } else if (parts[2].match(/^(PE|FE|TE)$/i)) {
+          semester = parts[1];
+          examType = parts[2].toUpperCase();
+        }
+        
+        let nameStartIndex = 3;
+        const studentName = parts.slice(nameStartIndex, studentIdIndex).join(' ');
+        
+        return {
+          subject: parts[0],
+          semester: semester,
+          examType: examType,
+          slot: 1,
+          password: '000000',
+          studentName: studentName || 'Unknown',
+          studentId: parts[studentIdIndex],
+        };
+      }
+    }
+    
     return null;
   };
 
-  const handleFileUpload = (e) => {
-    const files = Array.from(e.target.files);
-    const parsedFiles = files.map((file) => {
-      const info = parseFileName(file.name);
-      return {
-        file,
-        info,
-        fileName: file.name,
-      };
-    });
-    setUploadedFiles(parsedFiles);
-    setCurrentFileIndex(0);
+  const handleSelectStudent = (student) => {
+    setSelectedStudent(student);
     setScores({});
     setNotes({});
   };
@@ -93,9 +162,8 @@ function GradingPage({ user, onLogout }) {
   };
 
   const handleSubmitGrade = () => {
-    const currentFile = uploadedFiles[currentFileIndex];
-    if (!currentFile || !currentFile.info) {
-      alert('Thông tin file không hợp lệ!');
+    if (!selectedStudent) {
+      alert('Vui lòng chọn sinh viên để chấm điểm!');
       return;
     }
 
@@ -107,12 +175,12 @@ function GradingPage({ user, onLogout }) {
     }
 
     const gradingResult = {
-      studentId: currentFile.info.studentId,
-      studentName: currentFile.info.studentName,
-      subject: currentFile.info.subject,
-      semester: currentFile.info.semester,
-      examType: currentFile.info.examType,
-      password: currentFile.info.password,
+      studentId: selectedStudent.studentId,
+      studentName: selectedStudent.studentName,
+      subject: exam.subject.code,
+      semester: exam.semester,
+      examType: exam.type,
+      password: selectedStudent.password,
       scores: { ...scores },
       notes: { ...notes },
       totalScore: calculateTotalScore(),
@@ -121,36 +189,43 @@ function GradingPage({ user, onLogout }) {
     };
 
     setGradedSubmissions([...gradedSubmissions, gradingResult]);
+    
+    // Update student as graded
+    const updatedStudents = exam.students.map(s => 
+      s.id === selectedStudent.id 
+        ? { ...s, graded: true, totalScore: calculateTotalScore() }
+        : s
+    );
+    exam.students = updatedStudents;
+    
     setShowSuccess(true);
     
     setTimeout(() => {
       setShowSuccess(false);
-      // Move to next file if available
-      if (currentFileIndex < uploadedFiles.length - 1) {
-        setCurrentFileIndex(currentFileIndex + 1);
-        setScores({});
-        setNotes({});
-      }
+      setSelectedStudent(null);
+      setScores({});
+      setNotes({});
     }, 2000);
   };
 
   const handlePreviousFile = () => {
-    if (currentFileIndex > 0) {
-      setCurrentFileIndex(currentFileIndex - 1);
+    const currentIndex = exam.students.findIndex(s => s.id === selectedStudent?.id);
+    if (currentIndex > 0) {
+      setSelectedStudent(exam.students[currentIndex - 1]);
       setScores({});
       setNotes({});
     }
   };
 
   const handleNextFile = () => {
-    if (currentFileIndex < uploadedFiles.length - 1) {
-      setCurrentFileIndex(currentFileIndex + 1);
+    const currentIndex = exam.students.findIndex(s => s.id === selectedStudent?.id);
+    if (currentIndex < exam.students.length - 1) {
+      setSelectedStudent(exam.students[currentIndex + 1]);
       setScores({});
       setNotes({});
     }
   };
 
-  const currentFile = uploadedFiles[currentFileIndex];
   const totalMaxScore = exam.gradingCriteria.reduce((sum, c) => sum + c.maxScore, 0);
 
   return (
@@ -167,29 +242,60 @@ function GradingPage({ user, onLogout }) {
       </div>
 
       <div className="grading-container">
-        {/* Upload Section */}
-        {uploadedFiles.length === 0 ? (
-          <div className="upload-section">
-            <div className="upload-card">
-              <Upload size={64} />
-              <h2>Upload bài làm sinh viên</h2>
-              <p>Chọn các file bài làm để bắt đầu chấm điểm</p>
-              <p className="file-format">
-                Format tên file: SWD392_SU25_PE_1_358715_Vu Trung Tin_SE161572.docx
-              </p>
-              <input
-                type="file"
-                multiple
-                accept=".doc,.docx"
-                onChange={handleFileUpload}
-                className="file-input-hidden"
-                id="file-upload"
-              />
-              <label htmlFor="file-upload" className="btn btn-primary btn-upload">
-                <Upload size={20} />
-                Chọn file
-              </label>
+        {/* Student List */}
+        {!selectedStudent ? (
+          <div className="student-list-section">
+            <div className="section-header">
+              <h2>Danh sách sinh viên ({exam.students?.length || 0})</h2>
+              <div className="grading-stats">
+                <span className="stat-badge graded">
+                  Đã chấm: {exam.students?.filter(s => s.graded).length || 0}
+                </span>
+                <span className="stat-badge pending">
+                  Chưa chấm: {exam.students?.filter(s => !s.graded).length || 0}
+                </span>
+              </div>
             </div>
+            
+            {exam.students && exam.students.length > 0 ? (
+              <div className="student-grid">
+                {exam.students.map((student) => (
+                  <div 
+                    key={student.id} 
+                    className={`student-card ${student.graded ? 'graded' : ''}`}
+                    onClick={() => handleSelectStudent(student)}
+                  >
+                    <div className="student-card-header">
+                      <FileText size={32} />
+                      {student.graded && (
+                        <CheckCircle size={20} className="graded-icon" />
+                      )}
+                    </div>
+                    <div className="student-card-body">
+                      <h3>{student.studentName}</h3>
+                      <p className="student-id">{student.studentId}</p>
+                      <p className="student-file">{student.fileName}</p>
+                      {student.graded && (
+                        <div className="student-score">
+                          Điểm: <strong>{student.totalScore?.toFixed(1)}/{totalMaxScore}</strong>
+                        </div>
+                      )}
+                    </div>
+                    <div className="student-card-footer">
+                      <button className="btn btn-primary btn-sm">
+                        {student.graded ? 'Xem chi tiết' : 'Chấm điểm'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <AlertCircle size={64} />
+                <h3>Chưa có bài nộp</h3>
+                <p>Admin chưa upload bài làm của sinh viên cho kỳ thi này</p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="grading-workspace">
@@ -199,65 +305,69 @@ function GradingPage({ user, onLogout }) {
                 <div className="card-header">
                   <FileText size={24} />
                   <h3>Thông tin sinh viên</h3>
+                  <button 
+                    onClick={() => setSelectedStudent(null)}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <ArrowLeft size={16} />
+                    Quay lại danh sách
+                  </button>
                 </div>
-                {currentFile && currentFile.info ? (
-                  <div className="student-details">
-                    <div className="detail-row">
-                      <span className="detail-label">Tên sinh viên:</span>
-                      <span className="detail-value">{currentFile.info.studentName}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">MSSV:</span>
-                      <span className="detail-value">{currentFile.info.studentId}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Môn thi:</span>
-                      <span className="detail-value">{currentFile.info.subject}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Kỳ thi:</span>
-                      <span className="detail-value">{currentFile.info.semester}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Loại thi:</span>
-                      <span className="detail-value">{currentFile.info.examType}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Password:</span>
-                      <span className="detail-value password">{currentFile.info.password}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">File:</span>
-                      <span className="detail-value file-name">{currentFile.fileName}</span>
-                    </div>
+                <div className="student-details">
+                  <div className="detail-row">
+                    <span className="detail-label">Tên sinh viên:</span>
+                    <span className="detail-value">{selectedStudent.studentName}</span>
                   </div>
-                ) : (
-                  <div className="alert-warning">
-                    <AlertCircle size={20} />
-                    <span>Tên file không đúng định dạng!</span>
+                  <div className="detail-row">
+                    <span className="detail-label">MSSV:</span>
+                    <span className="detail-value">{selectedStudent.studentId}</span>
                   </div>
-                )}
+                  <div className="detail-row">
+                    <span className="detail-label">Môn thi:</span>
+                    <span className="detail-value">{exam.subject.code}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Kỳ thi:</span>
+                    <span className="detail-value">{exam.semester}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Loại thi:</span>
+                    <span className="detail-value">{exam.type}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Slot:</span>
+                    <span className="detail-value">{exam.slot}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">Password:</span>
+                    <span className="detail-value password">{selectedStudent.password}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-label">File:</span>
+                    <span className="detail-value file-name">{selectedStudent.fileName}</span>
+                  </div>
+                </div>
               </div>
 
               {/* File Navigation */}
               <div className="file-navigation">
                 <button
                   onClick={handlePreviousFile}
-                  disabled={currentFileIndex === 0}
+                  disabled={exam.students.findIndex(s => s.id === selectedStudent.id) === 0}
                   className="btn btn-secondary"
                 >
                   <ChevronLeft size={18} />
-                  Bài trước
+                  Sinh viên trước
                 </button>
                 <span className="file-counter">
-                  {currentFileIndex + 1} / {uploadedFiles.length}
+                  {exam.students.findIndex(s => s.id === selectedStudent.id) + 1} / {exam.students.length}
                 </span>
                 <button
                   onClick={handleNextFile}
-                  disabled={currentFileIndex === uploadedFiles.length - 1}
+                  disabled={exam.students.findIndex(s => s.id === selectedStudent.id) === exam.students.length - 1}
                   className="btn btn-secondary"
                 >
-                  Bài sau
+                  Sinh viên sau
                   <ChevronRight size={18} />
                 </button>
               </div>
@@ -270,7 +380,7 @@ function GradingPage({ user, onLogout }) {
                 <div className="document-placeholder">
                   <FileText size={48} />
                   <p>Xem bài làm trong file:</p>
-                  <p className="file-name">{currentFile?.fileName}</p>
+                  <p className="file-name">{selectedStudent.fileName}</p>
                   <p className="note">
                     (Trong môi trường thực tế, bài làm sẽ được hiển thị ở đây)
                   </p>
@@ -333,7 +443,6 @@ function GradingPage({ user, onLogout }) {
                 <button
                   onClick={handleSubmitGrade}
                   className="btn btn-success btn-submit"
-                  disabled={!currentFile?.info}
                 >
                   <Save size={20} />
                   Lưu điểm
