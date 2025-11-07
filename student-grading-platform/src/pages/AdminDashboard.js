@@ -204,56 +204,162 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-        console.log('Excel data:', jsonData);
         
-        if (jsonData.length === 0) {
+        console.log('========== IMPORT CRITERIA DEBUG ==========');
+        console.log('File name:', file.name);
+        console.log('Sheet name:', sheetName);
+        
+        // Đọc toàn bộ dữ liệu dạng array (không bỏ dòng nào)
+        const jsonDataAsArray = XLSX.utils.sheet_to_json(worksheet, { 
+          header: 1, // Đọc dạng array
+          raw: false,
+          defval: ''
+        });
+        
+        console.log('Raw data as array (all rows):', jsonDataAsArray);
+        console.log('Total rows:', jsonDataAsArray.length);
+        
+        if (jsonDataAsArray.length === 0) {
           alert('File Excel trống hoặc không đúng định dạng!');
           return;
         }
-
-        // Log first row to see column names
-        console.log('First row columns:', Object.keys(jsonData[0]));
-
-        const criteria = jsonData.map((row, index) => {
-          // Hỗ trợ nhiều tên cột khác nhau
-          const name = row['Tiêu chí'] || row['Criteria'] || row['Name'] || 
-                      row['Tieu chi'] || row['name'] || row['criteria'] || 
-                      row['Tiêu Chí'] || row['TieuChi'] || `Tiêu chí ${index + 1}`;
+        
+        // Lọc bỏ các dòng trống
+        const filteredData = jsonDataAsArray.filter(row => {
+          return row && row.length > 0 && row.some(cell => cell && String(cell).trim() !== '');
+        });
+        
+        console.log('Filtered data (removed empty rows):', filteredData);
+        console.log('Valid rows:', filteredData.length);
+        
+        if (filteredData.length === 0) {
+          alert('File Excel không có dữ liệu hợp lệ!');
+          return;
+        }
+        
+        // Phát hiện xem có header hay không
+        // Kiểm tra dòng đầu tiên: nếu cột thứ 2 là số thì KHÔNG có header
+        let hasHeader = false;
+        let dataRows = filteredData;
+        
+        if (filteredData.length > 0 && filteredData[0].length >= 2) {
+          const firstRow = filteredData[0];
+          const secondColumn = firstRow[1];
           
-          const maxScore = parseFloat(
-            row['Điểm tối đa'] || row['Max Score'] || row['Score'] || 
-            row['Diem toi da'] || row['MaxScore'] || row['score'] ||
-            row['Điểm'] || row['Diem'] || row['max_score'] || 10
-          );
+          // Nếu cột thứ 2 của dòng đầu là số -> không có header (cột 2 là điểm)
+          // Nếu cột thứ 2 là text -> có header
+          const isNumber = secondColumn && !isNaN(parseFloat(String(secondColumn).trim()));
           
-          const description = row['Mô tả'] || row['Description'] || 
-                            row['Mo ta'] || row['description'] || 
-                            row['Mô Tả'] || row['MoTa'] || '';
+          if (!isNumber) {
+            // Có thể là header
+            const possibleHeaderNames = [
+              'tiêu chí', 'criteria', 'name', 'tieu chi', 'nội dung', 'content',
+              'điểm', 'score', 'max score', 'điểm tối đa', 'diem', 'point'
+            ];
+            
+            // Kiểm tra xem dòng đầu có chứa các từ khóa header không
+            const firstRowText = firstRow.map(cell => String(cell).toLowerCase().trim()).join(' ');
+            const hasHeaderKeywords = possibleHeaderNames.some(keyword => firstRowText.includes(keyword));
+            
+            if (hasHeaderKeywords) {
+              hasHeader = true;
+              dataRows = filteredData.slice(1); // Bỏ dòng header
+              console.log('✓ Detected: File has HEADER row');
+              console.log('Header row:', firstRow);
+              console.log('Data rows (without header):', dataRows);
+            } else {
+              console.log('✓ Detected: File has NO header (first row is data)');
+            }
+          } else {
+            console.log('✓ Detected: File has NO header (second column is numeric)');
+          }
+        }
+        
+        console.log('Final data to process:', dataRows);
+        console.log('Has header:', hasHeader);
 
-          return {
+        const criteria = dataRows.map((row, index) => {
+          console.log(`\n----- Processing Row ${index + 1} -----`);
+          console.log('Raw row data:', row);
+          
+          let name = '';
+          let maxScore = null;
+          let description = '';
+          
+          // Row luôn là array: [column1, column2, column3, ...]
+          if (Array.isArray(row)) {
+            // Cột đầu tiên là tên tiêu chí
+            if (row[0] && String(row[0]).trim() !== '') {
+              name = String(row[0]).trim();
+              console.log(`✓ Name from column A (index 0): "${name}"`);
+            }
+            
+            // Cột thứ 2 là điểm
+            if (row[1] && String(row[1]).trim() !== '') {
+              const scoreStr = String(row[1]).trim();
+              const parsed = parseFloat(scoreStr);
+              if (!isNaN(parsed)) {
+                maxScore = parsed;
+                console.log(`✓ Score from column B (index 1): ${maxScore}`);
+              }
+            }
+            
+            // Cột thứ 3 là mô tả (nếu có)
+            if (row[2] && String(row[2]).trim() !== '') {
+              description = String(row[2]).trim();
+              console.log(`✓ Description from column C (index 2): "${description}"`);
+            }
+          }
+          
+          // Fallback values
+          if (!name) {
+            name = `Tiêu chí ${index + 1}`;
+            console.log(`⚠ No name found, using default: "${name}"`);
+          }
+          
+          if (maxScore === null || isNaN(maxScore)) {
+            maxScore = 10;
+            console.log(`⚠ No valid score found, using default: ${maxScore}`);
+          }
+
+          const criteriaObj = {
             id: index + 1,
             name: name,
             maxScore: maxScore,
             description: description
           };
+          
+          console.log('✓ Final criteria object:', criteriaObj);
+          return criteriaObj;
         });
 
-        console.log('Parsed criteria:', criteria);
+        console.log('\n========== FINAL PARSED CRITERIA ==========');
+        console.log('Total criteria:', criteria.length);
+        criteria.forEach((c, idx) => {
+          console.log(`${idx + 1}. ${c.name} - ${c.maxScore} điểm`);
+        });
+        console.log('===========================================\n');
 
-        setExams(exams.map(exam => 
+        // Cập nhật state
+        const updatedExams = exams.map(exam => 
           exam.id === selectedExam.id 
             ? { ...exam, gradingCriteria: criteria }
             : exam
-        ));
+        );
+        
+        setExams(updatedExams);
+        
+        console.log('Updated exam with criteria:', updatedExams.find(e => e.id === selectedExam.id));
 
-        alert(`Đã import ${criteria.length} tiêu chí chấm điểm!`);
+        // Alert chi tiết
+        const criteriaList = criteria.map(c => `  • ${c.name}: ${c.maxScore} điểm`).join('\n');
+        alert(`✓ Đã import thành công ${criteria.length} tiêu chí!\n\nCác tiêu chí:\n${criteriaList}`);
+        
         setShowCriteriaModal(false);
         setSelectedExam(null);
       } catch (error) {
-        console.error('Error importing Excel:', error);
-        alert('Lỗi khi đọc file Excel: ' + error.message);
+        console.error('❌ Error importing Excel:', error);
+        alert('Lỗi khi đọc file Excel: ' + error.message + '\n\nVui lòng kiểm tra console để xem chi tiết.');
       }
     };
     reader.readAsArrayBuffer(file);

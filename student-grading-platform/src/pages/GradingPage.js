@@ -19,6 +19,9 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [documentContent, setDocumentContent] = useState('');
   const [isLoadingDocument, setIsLoadingDocument] = useState(false);
+  const [compareDocumentContent, setCompareDocumentContent] = useState('');
+  const [isLoadingCompareDocument, setIsLoadingCompareDocument] = useState(false);
+  const [similarityScore, setSimilarityScore] = useState(null);
 
   // Load document content from Blob when student is selected
   const loadDocumentContent = async (student) => {
@@ -82,8 +85,93 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       loadDocumentContent(selectedStudent);
     } else {
       setDocumentContent('');
+      setCompareDocumentContent('');
+      setSimilarityScore(null);
     }
   }, [selectedStudent]);
+
+  // Function to calculate text similarity (Jaccard similarity)
+  const calculateSimilarity = (text1, text2) => {
+    // Remove HTML tags
+    const cleanText1 = text1.replace(/<[^>]*>/g, ' ').toLowerCase();
+    const cleanText2 = text2.replace(/<[^>]*>/g, ' ').toLowerCase();
+    
+    // Split into words
+    const words1 = cleanText1.split(/\s+/).filter(w => w.length > 3);
+    const words2 = cleanText2.split(/\s+/).filter(w => w.length > 3);
+    
+    // Create sets
+    const set1 = new Set(words1);
+    const set2 = new Set(words2);
+    
+    // Calculate intersection
+    const intersection = new Set([...set1].filter(x => set2.has(x)));
+    
+    // Calculate union
+    const union = new Set([...set1, ...set2]);
+    
+    // Jaccard similarity
+    const similarity = (intersection.size / union.size) * 100;
+    
+    return Math.round(similarity);
+  };
+
+  // Handle compare document upload
+  const handleCompareFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setIsLoadingCompareDocument(true);
+    setCompareDocumentContent('');
+    setSimilarityScore(null);
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      
+      const options = {
+        convertImage: mammoth.images.imgElement(function(image) {
+          return image.read("base64").then(function(imageBuffer) {
+            return {
+              src: "data:" + image.contentType + ";base64," + imageBuffer,
+              alt: image.altText || "Image"
+            };
+          }).catch(function(err) {
+            console.error('Error converting image:', err);
+            return {
+              src: "",
+              alt: "[Image could not be loaded]"
+            };
+          });
+        }),
+        styleMap: [
+          "p[style-name='Heading 1'] => h1",
+          "p[style-name='Heading 2'] => h2",
+          "p[style-name='Heading 3'] => h3",
+          "b => strong",
+          "i => em"
+        ]
+      };
+      
+      const result = await mammoth.convertToHtml({ arrayBuffer }, options);
+      setCompareDocumentContent(result.value);
+      
+      // Calculate similarity
+      if (documentContent && result.value) {
+        const similarity = calculateSimilarity(documentContent, result.value);
+        setSimilarityScore(similarity);
+      }
+    } catch (error) {
+      console.error('Error reading compare document:', error);
+      alert('Không thể đọc file so sánh. Vui lòng kiểm tra định dạng file.');
+    } finally {
+      setIsLoadingCompareDocument(false);
+    }
+  };
+
+  const clearCompareDocument = () => {
+    setCompareDocumentContent('');
+    setSimilarityScore(null);
+  };
 
   if (!exam) {
     return <div>Exam not found</div>;
@@ -260,12 +348,14 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
           </div>
         ) : (
           <div className="grading-workspace">
-            {/* Left Panel - Student Info & Document */}
-            <div className="left-panel">
+            {/* Top Section - Student Info */}
+            <div className="top-section">
               <div className="card student-info-card">
                 <div className="card-header">
-                  <FileText size={24} />
-                  <h3>Thông tin sinh viên</h3>
+                  <div className="header-left">
+                    <FileText size={24} />
+                    <h3>Thông tin sinh viên</h3>
+                  </div>
                   <button 
                     onClick={() => setSelectedStudent(null)}
                     className="btn btn-secondary btn-sm"
@@ -300,10 +390,6 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                     <span className="detail-value">{exam.slot}</span>
                   </div>
                   <div className="detail-row">
-                    <span className="detail-label">Password:</span>
-                    <span className="detail-value password">{selectedStudent.password}</span>
-                  </div>
-                  <div className="detail-row">
                     <span className="detail-label">File:</span>
                     <span className="detail-value file-name">{selectedStudent.fileName}</span>
                   </div>
@@ -332,8 +418,13 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   <ChevronRight size={18} />
                 </button>
               </div>
+            </div>
 
-              <div className="card document-viewer">
+            {/* Bottom Section - Document & Grading Side by Side */}
+            <div className="bottom-section">
+              {/* Left Panel - Document Viewer */}
+              <div className="left-panel">
+                <div className="card document-viewer">
                 <div className="card-header">
                   <FileText size={24} />
                   <h3>Bài làm sinh viên</h3>
@@ -363,11 +454,12 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                     </p>
                   </div>
                 )}
+                </div>
               </div>
-            </div>
 
-            {/* Right Panel - Grading Criteria */}
-            <div className="right-panel">
+              {/* Right Panel - Grading Criteria */}
+              <div className="right-panel">
+
               <div className="card grading-card">
                 <div className="card-header">
                   <h3>Tiêu chí chấm điểm</h3>
@@ -448,6 +540,75 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   </div>
                 </div>
               )}
+            </div>
+            </div>
+
+            {/* Plagiarism Checker - Full Width Below */}
+            <div className="plagiarism-section">
+              <div className="card plagiarism-checker">
+                <div className="card-header">
+                  <FileText size={24} />
+                  <h3>So sánh độ trùng</h3>
+                </div>
+                <div className="plagiarism-content">
+                  {!compareDocumentContent ? (
+                    <div className="upload-compare">
+                      <p className="upload-instruction">Upload file để so sánh với bài làm hiện tại</p>
+                      <input
+                        type="file"
+                        accept=".doc,.docx"
+                        onChange={handleCompareFileUpload}
+                        className="file-input-hidden"
+                        id="compare-file-input"
+                      />
+                      <label htmlFor="compare-file-input" className="btn btn-primary">
+                        <FileText size={18} />
+                        Chọn file so sánh
+                      </label>
+                      {isLoadingCompareDocument && (
+                        <div className="loading-text">
+                          <div className="loading-spinner-small"></div>
+                          <span>Đang tải file...</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="comparison-result">
+                      <div className="similarity-header">
+                        <div className="similarity-score-container">
+                          <div className="similarity-score-circle">
+                            <span className={`similarity-percentage ${parseFloat(similarityScore) > 50 ? 'high' : parseFloat(similarityScore) > 30 ? 'medium' : 'low'}`}>
+                              {similarityScore}%
+                            </span>
+                          </div>
+                          <div className="similarity-info">
+                            <h4>Độ trùng lặp</h4>
+                            <p className={`similarity-status ${parseFloat(similarityScore) > 50 ? 'high' : parseFloat(similarityScore) > 30 ? 'medium' : 'low'}`}>
+                              {parseFloat(similarityScore) > 50 ? 'Cao - Cần kiểm tra' : parseFloat(similarityScore) > 30 ? 'Trung bình - Cảnh báo' : 'Thấp - An toàn'}
+                            </p>
+                          </div>
+                        </div>
+                        <button onClick={clearCompareDocument} className="btn btn-secondary btn-sm">
+                          Xóa file so sánh
+                        </button>
+                      </div>
+                      
+                      <div className="comparison-single-view">
+                        <div className="comparison-column-header">
+                          <FileText size={18} />
+                          <h4>File so sánh</h4>
+                        </div>
+                        <div className="comparison-document-preview">
+                          <div 
+                            className="comparison-document-text"
+                            dangerouslySetInnerHTML={{ __html: compareDocumentContent }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
