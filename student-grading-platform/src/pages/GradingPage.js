@@ -475,7 +475,10 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   {exam.gradingCriteria.map((criteria) => (
                     <div key={criteria.id} className="criteria-item">
                       <div className="criteria-header">
-                        <h4>{criteria.name}</h4>
+                        <h4>
+                          {criteria.order && <span className="criteria-order">{criteria.order}. </span>}
+                          {criteria.name}
+                        </h4>
                         <span className="max-score">Max: {criteria.maxScore} điểm</span>
                       </div>
                       {criteria.description && (

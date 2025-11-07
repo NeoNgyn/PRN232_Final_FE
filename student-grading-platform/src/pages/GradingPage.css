@@ -883,6 +883,16 @@
   color: #2d3748;
   font-size: 16px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.criteria-order {
+  color: #667eea;
+  font-weight: 700;
+  font-size: 17px;
+  min-width: 24px;
 }
 
 .max-score {
