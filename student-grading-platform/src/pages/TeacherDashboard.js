@@ -1,53 +1,23 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, BookOpen, ClipboardList, FileText } from 'lucide-react';
 import './TeacherDashboard.css';
 
-// Mock data - kỳ thi được assign cho giáo viên
-const mockAssignedExams = [
-  {
-    id: 1,
-    subject: { code: 'SWD392', name: 'Software Architecture and Design' },
-    semester: 'SU25',
-    type: 'PE',
-    gradingCriteria: [
-      { id: 1, name: 'Thiết kế kiến trúc hệ thống', maxScore: 2, description: 'Đánh giá khả năng thiết kế kiến trúc' },
-      { id: 2, name: 'Code quality và convention', maxScore: 2, description: 'Đánh giá chất lượng code' },
-      { id: 3, name: 'Implement features', maxScore: 3, description: 'Triển khai các tính năng' },
-      { id: 4, name: 'Database design', maxScore: 2, description: 'Thiết kế cơ sở dữ liệu' },
-      { id: 5, name: 'Documentation', maxScore: 1, description: 'Tài liệu hướng dẫn' },
-    ],
-    submittedStudents: 15,
-    gradedStudents: 8,
-  },
-  {
-    id: 2,
-    subject: { code: 'PRN231', name: 'Building Cross-Platform Applications' },
-    semester: 'SU25',
-    type: 'PE',
-    gradingCriteria: [
-      { id: 1, name: 'UI/UX Design', maxScore: 2.5, description: 'Giao diện người dùng' },
-      { id: 2, name: 'API Integration', maxScore: 2.5, description: 'Tích hợp API' },
-      { id: 3, name: 'State Management', maxScore: 2, description: 'Quản lý state' },
-      { id: 4, name: 'Performance', maxScore: 2, description: 'Hiệu năng ứng dụng' },
-      { id: 5, name: 'Code Structure', maxScore: 1, description: 'Cấu trúc code' },
-    ],
-    submittedStudents: 20,
-    gradedStudents: 12,
-  },
-];
-
-function TeacherDashboard({ user, onLogout }) {
+function TeacherDashboard({ user, onLogout, exams, subjects }) {
   const navigate = useNavigate();
-  const [assignedExams] = useState(mockAssignedExams);
+  
+  // Filter exams assigned to this teacher (mock: teacher id = 2)
+  const assignedExams = exams.filter(exam => exam.teacherId === user.id);
 
   const handleStartGrading = (examId) => {
     navigate(`/grading/${examId}`);
   };
 
   const calculateProgress = (exam) => {
-    if (exam.submittedStudents === 0) return 0;
-    return Math.round((exam.gradedStudents / exam.submittedStudents) * 100);
+    const submittedStudents = exam.students?.length || 0;
+    const gradedStudents = exam.students?.filter(s => s.graded).length || 0;
+    if (submittedStudents === 0) return 0;
+    return Math.round((gradedStudents / submittedStudents) * 100);
   };
 
   return (
@@ -90,7 +60,7 @@ function TeacherDashboard({ user, onLogout }) {
               <FileText size={24} />
             </div>
             <div className="stat-info">
-              <h3>{assignedExams.reduce((sum, e) => sum + e.submittedStudents, 0)}</h3>
+              <h3>{assignedExams.reduce((sum, e) => sum + (e.students?.length || 0), 0)}</h3>
               <p>Tổng bài nộp</p>
             </div>
           </div>
@@ -99,7 +69,7 @@ function TeacherDashboard({ user, onLogout }) {
               <BookOpen size={24} />
             </div>
             <div className="stat-info">
-              <h3>{assignedExams.reduce((sum, e) => sum + e.gradedStudents, 0)}</h3>
+              <h3>{assignedExams.reduce((sum, e) => sum + (e.students?.filter(s => s.graded).length || 0), 0)}</h3>
               <p>Đã chấm xong</p>
             </div>
           </div>
@@ -109,6 +79,10 @@ function TeacherDashboard({ user, onLogout }) {
         <div className="exams-grid">
           {assignedExams.map((exam) => {
             const progress = calculateProgress(exam);
+            const subject = subjects.find(s => s.id === exam.subjectId);
+            const submittedStudents = exam.students?.length || 0;
+            const gradedStudents = exam.students?.filter(s => s.graded).length || 0;
+            
             return (
               <div key={exam.id} className="exam-card">
                 <div className="exam-header">
@@ -117,27 +91,28 @@ function TeacherDashboard({ user, onLogout }) {
                 </div>
                 
                 <div className="exam-body">
-                  <h3>{exam.subject.code}</h3>
-                  <p className="exam-name">{exam.subject.name}</p>
+                  <h3>{subject?.code || 'N/A'}</h3>
+                  <p className="exam-name">{subject?.name || 'N/A'}</p>
+                  <p className="exam-slot">Slot {exam.slot}</p>
                   
                   <div className="exam-stats">
                     <div className="stat-item">
                       <span className="stat-label">Tiêu chí chấm:</span>
-                      <span className="stat-value">{exam.gradingCriteria.length} tiêu chí</span>
+                      <span className="stat-value">{exam.gradingCriteria?.length || 0} tiêu chí</span>
                     </div>
                     <div className="stat-item">
                       <span className="stat-label">Tổng điểm:</span>
                       <span className="stat-value">
-                        {exam.gradingCriteria.reduce((sum, c) => sum + c.maxScore, 0)} điểm
+                        {exam.gradingCriteria?.reduce((sum, c) => sum + c.maxScore, 0) || 0} điểm
                       </span>
                     </div>
                     <div className="stat-item">
                       <span className="stat-label">Bài nộp:</span>
-                      <span className="stat-value">{exam.submittedStudents} bài</span>
+                      <span className="stat-value">{submittedStudents} bài</span>
                     </div>
                     <div className="stat-item">
                       <span className="stat-label">Đã chấm:</span>
-                      <span className="stat-value">{exam.gradedStudents} bài</span>
+                      <span className="stat-value">{gradedStudents} bài</span>
                     </div>
                   </div>
 
