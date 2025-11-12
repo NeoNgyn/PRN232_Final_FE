@@ -15,6 +15,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [scores, setScores] = useState({});
   const [notes, setNotes] = useState({});
+  const [addedCriteria, setAddedCriteria] = useState({}); // Track which criteria have been added
   const [gradedSubmissions, setGradedSubmissions] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
   const [documentContent, setDocumentContent] = useState('');
@@ -22,6 +23,16 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   const [compareDocumentContent, setCompareDocumentContent] = useState('');
   const [isLoadingCompareDocument, setIsLoadingCompareDocument] = useState(false);
   const [similarityScore, setSimilarityScore] = useState(null);
+  
+  // Violation Report states
+  const [violations, setViolations] = useState([]);
+  const [showViolationForm, setShowViolationForm] = useState(false);
+  const [editingViolation, setEditingViolation] = useState(null);
+  const [violationForm, setViolationForm] = useState({
+    type: 'Keyword',
+    description: '',
+    severity: 'Warning'
+  });
 
   // Load document content from Blob when student is selected
   const loadDocumentContent = async (student) => {
@@ -184,6 +195,22 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     setSelectedStudent(student);
     setScores({});
     setNotes({});
+    setAddedCriteria({}); // Reset added criteria when switching students
+  };
+
+  const handleAddCriteria = (criteriaId) => {
+    const score = scores[criteriaId];
+    if (score === undefined || score === '') {
+      alert('Vui lòng nhập điểm số trước khi Add!');
+      return;
+    }
+    setAddedCriteria({ ...addedCriteria, [criteriaId]: true });
+  };
+
+  const handleEditCriteria = (criteriaId) => {
+    const updatedAdded = { ...addedCriteria };
+    delete updatedAdded[criteriaId];
+    setAddedCriteria(updatedAdded);
   };
 
   const handleScoreChange = (criteriaId, value) => {
@@ -199,8 +226,96 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     setNotes({ ...notes, [criteriaId]: value });
   };
 
+  // Violation penalty mapping
+  const getPenaltyByType = (type) => {
+    const penalties = {
+      'Keyword': 0.5,
+      'LateSubmission': 1.0,
+      'Plagiarism': 3.0,
+      'FileError': 0.5
+    };
+    return penalties[type] || 0;
+  };
+
+  // Violation handlers
+  const handleOpenViolationForm = () => {
+    setShowViolationForm(true);
+    setEditingViolation(null);
+    setViolationForm({
+      type: 'Keyword',
+      description: '',
+      severity: 'Warning'
+    });
+  };
+
+  const handleCloseViolationForm = () => {
+    setShowViolationForm(false);
+    setEditingViolation(null);
+    setViolationForm({
+      type: 'Keyword',
+      description: '',
+      severity: 'Warning'
+    });
+  };
+
+  const handleViolationFormChange = (field, value) => {
+    setViolationForm({ ...violationForm, [field]: value });
+  };
+
+  const handleAddViolation = () => {
+    if (!violationForm.description.trim()) {
+      alert('Vui lòng nhập mô tả vi phạm!');
+      return;
+    }
+
+    const newViolation = {
+      id: Date.now(),
+      ...violationForm,
+      penalty: getPenaltyByType(violationForm.type)
+    };
+
+    setViolations([...violations, newViolation]);
+    handleCloseViolationForm();
+  };
+
+  const handleEditViolation = (violation) => {
+    setEditingViolation(violation.id);
+    setViolationForm({
+      type: violation.type,
+      description: violation.description,
+      severity: violation.severity
+    });
+    setShowViolationForm(true);
+  };
+
+  const handleUpdateViolation = () => {
+    if (!violationForm.description.trim()) {
+      alert('Vui lòng nhập mô tả vi phạm!');
+      return;
+    }
+
+    setViolations(violations.map(v => 
+      v.id === editingViolation 
+        ? { ...v, ...violationForm, penalty: getPenaltyByType(violationForm.type) }
+        : v
+    ));
+    handleCloseViolationForm();
+  };
+
+  const handleDeleteViolation = (violationId) => {
+    if (window.confirm('Bạn có chắc muốn xóa vi phạm này?')) {
+      setViolations(violations.filter(v => v.id !== violationId));
+    }
+  };
+
+  const getTotalPenalty = () => {
+    return violations.reduce((sum, v) => sum + v.penalty, 0);
+  };
+
   const calculateTotalScore = () => {
-    return Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
+    const baseScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
+    const penalty = getTotalPenalty();
+    return Math.max(0, baseScore - penalty);
   };
 
   const handleSubmitGrade = () => {
@@ -475,11 +590,28 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   {exam.gradingCriteria.map((criteria) => (
                     <div key={criteria.id} className="criteria-item">
                       <div className="criteria-header">
-                        <h4>
-                          {criteria.order && <span className="criteria-order">{criteria.order}. </span>}
-                          {criteria.name}
-                        </h4>
-                        <span className="max-score">Max: {criteria.maxScore} điểm</span>
+                        <div className="criteria-title-group">
+                          <h4>
+                            {criteria.order && <span className="criteria-order">{criteria.order}. </span>}
+                            {criteria.name}
+                          </h4>
+                          <span className="max-score">Max: {criteria.maxScore} điểm</span>
+                        </div>
+                        {addedCriteria[criteria.id] ? (
+                          <button 
+                            className="btn-criteria-action btn-edit"
+                            onClick={() => handleEditCriteria(criteria.id)}
+                          >
+                            Edit
+                          </button>
+                        ) : (
+                          <button 
+                            className="btn-criteria-action btn-add"
+                            onClick={() => handleAddCriteria(criteria.id)}
+                          >
+                            Add
+                          </button>
+                        )}
                       </div>
                       {criteria.description && (
                         <p className="criteria-description">{criteria.description}</p>
@@ -496,6 +628,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                             value={scores[criteria.id] || ''}
                             onChange={(e) => handleScoreChange(criteria.id, e.target.value)}
                             placeholder={`0 - ${criteria.maxScore}`}
+                            disabled={addedCriteria[criteria.id]}
                           />
                         </div>
                         
@@ -506,6 +639,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                             onChange={(e) => handleNoteChange(criteria.id, e.target.value)}
                             placeholder="Nhập ghi chú cho tiêu chí này..."
                             rows="2"
+                            disabled={addedCriteria[criteria.id]}
                           />
                         </div>
                       </div>
@@ -544,6 +678,71 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                 </div>
               )}
             </div>
+            </div>
+
+            {/* Violation Report Section */}
+            <div className="violation-section">
+              <div className="card violation-card">
+                <div className="card-header">
+                  <div className="header-left">
+                    <AlertCircle size={24} />
+                    <h3>Báo cáo vi phạm</h3>
+                  </div>
+                  <button 
+                    onClick={handleOpenViolationForm}
+                    className="btn btn-warning"
+                  >
+                    <AlertCircle size={18} />
+                    Thêm vi phạm
+                  </button>
+                </div>
+
+                {violations.length > 0 ? (
+                  <div className="violations-list">
+                    {violations.map((violation) => (
+                      <div key={violation.id} className={`violation-item severity-${violation.severity.toLowerCase()}`}>
+                        <div className="violation-header">
+                          <div className="violation-type-badge">{violation.type}</div>
+                          <div className={`violation-severity severity-${violation.severity.toLowerCase()}`}>
+                            {violation.severity}
+                          </div>
+                        </div>
+                        <div className="violation-description">
+                          {violation.description}
+                        </div>
+                        <div className="violation-footer">
+                          <div className="violation-penalty">
+                            Penalty: <strong>-{violation.penalty} điểm</strong>
+                          </div>
+                          <div className="violation-actions">
+                            <button 
+                              onClick={() => handleEditViolation(violation)}
+                              className="btn-violation-action btn-edit-small"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteViolation(violation.id)}
+                              className="btn-violation-action btn-delete-small"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="total-penalty">
+                      <span>Tổng điểm bị trừ:</span>
+                      <span className="penalty-value">-{getTotalPenalty().toFixed(1)} điểm</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="no-violations">
+                    <AlertCircle size={48} />
+                    <p>Chưa có vi phạm nào được ghi nhận</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Plagiarism Checker - Full Width Below */}
@@ -624,6 +823,82 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
             <CheckCircle size={64} />
             <h2>Đã lưu điểm thành công!</h2>
             <p>Điểm số đã được lưu vào hệ thống</p>
+          </div>
+        </div>
+      )}
+
+      {/* Violation Form Modal */}
+      {showViolationForm && (
+        <div className="modal-overlay">
+          <div className="modal-content violation-modal">
+            <div className="modal-header">
+              <h3>
+                <AlertCircle size={20} />
+                {editingViolation ? 'Chỉnh sửa vi phạm' : 'Thêm vi phạm mới'}
+              </h3>
+              <button onClick={handleCloseViolationForm} className="btn-close">×</button>
+            </div>
+            
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Loại vi phạm *</label>
+                <select
+                  value={violationForm.type}
+                  onChange={(e) => handleViolationFormChange('type', e.target.value)}
+                  className="modal-select"
+                >
+                  <option value="Keyword">Keyword</option>
+                  <option value="LateSubmission">Late Submission</option>
+                  <option value="Plagiarism">Plagiarism</option>
+                  <option value="FileError">File Error</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Mức độ nghiêm trọng *</label>
+                <select
+                  value={violationForm.severity}
+                  onChange={(e) => handleViolationFormChange('severity', e.target.value)}
+                  className="modal-select"
+                >
+                  <option value="Info">Info</option>
+                  <option value="Warning">Warning</option>
+                  <option value="Critical">Critical</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Mô tả vi phạm *</label>
+                <textarea
+                  value={violationForm.description}
+                  onChange={(e) => handleViolationFormChange('description', e.target.value)}
+                  placeholder="Mô tả chi tiết về vi phạm..."
+                  rows="4"
+                  className="modal-textarea"
+                />
+              </div>
+
+              <div className="penalty-display">
+                <div className="penalty-info">
+                  <AlertCircle size={20} />
+                  <span>Điểm bị trừ:</span>
+                </div>
+                <span className="penalty-amount">-{getPenaltyByType(violationForm.type)} điểm</span>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button onClick={handleCloseViolationForm} className="btn btn-secondary">
+                Hủy
+              </button>
+              <button 
+                onClick={editingViolation ? handleUpdateViolation : handleAddViolation}
+                className="btn btn-warning"
+              >
+                <Save size={18} />
+                {editingViolation ? 'Cập nhật' : 'Thêm vi phạm'}
+              </button>
+            </div>
           </div>
         </div>
       )}
