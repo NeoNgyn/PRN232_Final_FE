@@ -282,32 +282,68 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
           console.log(`\n----- Processing Row ${index + 1} -----`);
           console.log('Raw row data:', row);
           
+          let order = null;
           let name = '';
           let maxScore = null;
           let description = '';
           
-          // Row luôn là array: [column1, column2, column3, ...]
+          // Row luôn là array: [column1, column2, column3, column4, ...]
           if (Array.isArray(row)) {
-            // Cột đầu tiên là tên tiêu chí
-            if (row[0] && String(row[0]).trim() !== '') {
-              name = String(row[0]).trim();
-              console.log(`✓ Name from column A (index 0): "${name}"`);
-            }
-            
-            // Cột thứ 2 là điểm
-            if (row[1] && String(row[1]).trim() !== '') {
-              const scoreStr = String(row[1]).trim();
-              const parsed = parseFloat(scoreStr);
-              if (!isNaN(parsed)) {
-                maxScore = parsed;
-                console.log(`✓ Score from column B (index 1): ${maxScore}`);
+            // Kiểm tra xem cột đầu tiên có phải là số (order) không
+            if (row[0] && !isNaN(parseFloat(String(row[0]).trim()))) {
+              // Format: Order | Tiêu chí | Điểm | Mô tả
+              order = parseInt(String(row[0]).trim());
+              console.log(`✓ Order from column A (index 0): ${order}`);
+              
+              // Cột thứ 2 là tên tiêu chí
+              if (row[1] && String(row[1]).trim() !== '') {
+                name = String(row[1]).trim();
+                console.log(`✓ Name from column B (index 1): "${name}"`);
               }
-            }
-            
-            // Cột thứ 3 là mô tả (nếu có)
-            if (row[2] && String(row[2]).trim() !== '') {
-              description = String(row[2]).trim();
-              console.log(`✓ Description from column C (index 2): "${description}"`);
+              
+              // Cột thứ 3 là điểm
+              if (row[2] && String(row[2]).trim() !== '') {
+                const scoreStr = String(row[2]).trim();
+                const parsed = parseFloat(scoreStr);
+                if (!isNaN(parsed)) {
+                  maxScore = parsed;
+                  console.log(`✓ Score from column C (index 2): ${maxScore}`);
+                }
+              }
+              
+              // Cột thứ 4 là mô tả (nếu có)
+              if (row[3] && String(row[3]).trim() !== '') {
+                description = String(row[3]).trim();
+                console.log(`✓ Description from column D (index 3): "${description}"`);
+              }
+            } else {
+              // Format cũ: Tiêu chí | Điểm | Mô tả (không có order)
+              console.log('Format: No order column detected');
+              
+              // Cột đầu tiên là tên tiêu chí
+              if (row[0] && String(row[0]).trim() !== '') {
+                name = String(row[0]).trim();
+                console.log(`✓ Name from column A (index 0): "${name}"`);
+              }
+              
+              // Cột thứ 2 là điểm
+              if (row[1] && String(row[1]).trim() !== '') {
+                const scoreStr = String(row[1]).trim();
+                const parsed = parseFloat(scoreStr);
+                if (!isNaN(parsed)) {
+                  maxScore = parsed;
+                  console.log(`✓ Score from column B (index 1): ${maxScore}`);
+                }
+              }
+              
+              // Cột thứ 3 là mô tả (nếu có)
+              if (row[2] && String(row[2]).trim() !== '') {
+                description = String(row[2]).trim();
+                console.log(`✓ Description from column C (index 2): "${description}"`);
+              }
+              
+              // Sử dụng index + 1 làm order mặc định
+              order = index + 1;
             }
           }
           
@@ -321,9 +357,15 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
             maxScore = 10;
             console.log(`⚠ No valid score found, using default: ${maxScore}`);
           }
+          
+          if (order === null) {
+            order = index + 1;
+            console.log(`⚠ No order found, using default: ${order}`);
+          }
 
           const criteriaObj = {
             id: index + 1,
+            order: order,
             name: name,
             maxScore: maxScore,
             description: description
