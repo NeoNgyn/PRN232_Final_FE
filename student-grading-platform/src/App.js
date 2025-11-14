@@ -34,8 +34,14 @@ const initialExams = [
 
 // Initial mock teachers
 const initialTeachers = [
-  { id: 2, name: 'Nguyễn Văn A', email: 'teacher1@fpt.edu.vn' },
-  { id: 3, name: 'Trần Thị B', email: 'teacher2@fpt.edu.vn' },
+  { id: 2, name: 'Nguy\u1ec5n V\u0103n A', email: 'teacher1@fpt.edu.vn' },
+  { id: 3, name: 'Tr\u1ea7n Th\u1ecb B', email: 'teacher2@fpt.edu.vn' },
+];
+
+// Initial mock semesters
+const initialSemesters = [
+  { id: 1, code: 'SU25', name: 'Summer 2025' },
+  { id: 2, code: 'FA24', name: 'Fall 2024' },
 ];
 
 function App() {
@@ -43,6 +49,7 @@ function App() {
   const [subjects, setSubjects] = useState(initialSubjects);
   const [exams, setExams] = useState(initialExams);
   const [teachers] = useState(initialTeachers);
+  const [semesters, setSemesters] = useState(initialSemesters);
 
   const handleLogin = (userData) => {
     setUser(userData);
@@ -82,6 +89,8 @@ function App() {
                   exams={exams}
                   setExams={setExams}
                   teachers={teachers}
+                  semesters={semesters}
+                  setSemesters={setSemesters}
                 />
               ) : (
                 <Navigate to="/" />

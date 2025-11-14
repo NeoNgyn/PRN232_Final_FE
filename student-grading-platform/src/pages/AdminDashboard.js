@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
-import { LogOut, Plus, Upload, BookOpen, Calendar, Users, FileSpreadsheet, Archive, FileText } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import React, { useState, useEffect } from 'react';
+import { LogOut, Plus, Upload, BookOpen, Calendar, Users, FileSpreadsheet, Archive, FileText, AlertCircle, Loader2 } from 'lucide-react';
+// import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
+import * as fileService from '../services/fileService';
+import subjectService from '../services/subjectService';
+import semesterService from '../services/semesterService';
 import './AdminDashboard.css';
 
-function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams, teachers }) {
+function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams, teachers, semesters, setSemesters }) {
   const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [showSemesterModal, setShowSemesterModal] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
   const [showCriteriaModal, setShowCriteriaModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedExam, setSelectedExam] = useState(null);
   const [newSubject, setNewSubject] = useState({ code: '', name: '' });
+  const [newSemester, setNewSemester] = useState({ code: '', name: '' });
   const [newExam, setNewExam] = useState({ 
     subjectId: '', 
     semester: '', 
@@ -20,16 +25,148 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
   });
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingCriteria, setIsUploadingCriteria] = useState(false);
+  const [criteriaError, setCriteriaError] = useState(null);
+  const [isLoadingSubjects, setIsLoadingSubjects] = useState(false);
+  const [subjectsError, setSubjectsError] = useState(null);
+  const [editingSubject, setEditingSubject] = useState(null);
+  const [isLoadingSemesters, setIsLoadingSemesters] = useState(false);
+  const [semestersError, setSemestersError] = useState(null);
+  const [editingSemester, setEditingSemester] = useState(null);
 
-  const handleAddSubject = (e) => {
-    e.preventDefault();
-    const subject = {
-      id: subjects.length + 1,
-      ...newSubject
+  // Fetch subjects on mount
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      setIsLoadingSubjects(true);
+      setSubjectsError(null);
+      try {
+        const fetchedSubjects = await subjectService.getAllSubjects();
+        setSubjects(fetchedSubjects);
+      } catch (error) {
+        setSubjectsError('Không thể tải danh sách môn học. Vui lòng thử lại.');
+        console.error('Error fetching subjects:', error);
+      } finally {
+        setIsLoadingSubjects(false);
+      }
     };
-    setSubjects([...subjects, subject]);
-    setNewSubject({ code: '', name: '' });
+
+    fetchSubjects();
+  }, [setSubjects]);
+
+  // Fetch semesters on mount
+  useEffect(() => {
+    const fetchSemesters = async () => {
+      setIsLoadingSemesters(true);
+      setSemestersError(null);
+      try {
+        const fetchedSemesters = await semesterService.getAllSemesters();
+        setSemesters(fetchedSemesters);
+      } catch (error) {
+        setSemestersError('Không thể tải danh sách học kỳ. Vui lòng thử lại.');
+        console.error('Error fetching semesters:', error);
+      } finally {
+        setIsLoadingSemesters(false);
+      }
+    };
+
+    fetchSemesters();
+  }, [setSemesters]);
+
+  const handleAddSubject = async (e) => {
+    e.preventDefault();
     setShowSubjectModal(false);
+    setIsLoadingSubjects(true);
+    setSubjectsError(null);
+    try {
+      if (editingSubject) {
+        // Update existing subject
+        const updatedSubject = await subjectService.updateSubject(editingSubject.id, newSubject);
+        setSubjects(subjects.map(s => s.id === editingSubject.id ? updatedSubject : s));
+        setEditingSubject(null);
+      } else {
+        // Create new subject
+        const createdSubject = await subjectService.createSubject(newSubject);
+        setSubjects([...subjects, createdSubject]);
+      }
+      setNewSubject({ code: '', name: '' });
+    } catch (error) {
+      setSubjectsError(editingSubject ? 'Không thể cập nhật môn học. Vui lòng thử lại.' : 'Không thể thêm môn học. Vui lòng thử lại.');
+      console.error('Error saving subject:', error);
+    } finally {
+      setIsLoadingSubjects(false);
+    }
+  };
+
+  const handleEditSubject = (subject) => {
+    setEditingSubject(subject);
+    setNewSubject({ code: subject.code, name: subject.name });
+    setShowSubjectModal(true);
+  };
+
+  const handleDeleteSubject = async (subjectId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa môn học này?')) {
+      return;
+    }
+    setIsLoadingSubjects(true);
+    setSubjectsError(null);
+    try {
+      await subjectService.deleteSubject(subjectId);
+      setSubjects(subjects.filter(s => s.id !== subjectId));
+    } catch (error) {
+      setSubjectsError('Không thể xóa môn học. Vui lòng thử lại.');
+      console.error('Error deleting subject:', error);
+    } finally {
+      setIsLoadingSubjects(false);
+    }
+  };
+
+  // Semester CRUD handlers
+  const handleAddSemester = async (e) => {
+    e.preventDefault();
+    setShowSemesterModal(false);
+    setIsLoadingSemesters(true);
+    setSemestersError(null);
+    try {
+      if (editingSemester) {
+        // Update existing semester
+        const updatedSemester = await semesterService.updateSemester(editingSemester.id, newSemester);
+        setSemesters(semesters.map(s => s.id === editingSemester.id ? updatedSemester : s));
+        setEditingSemester(null);
+      } else {
+        // Create new semester
+        const createdSemester = await semesterService.createSemester(newSemester);
+        setSemesters([...semesters, createdSemester]);
+      }
+      setNewSemester({ code: '', name: '' });
+    } catch (error) {
+      setSemestersError(editingSemester ? 'Không thể cập nhật học kỳ. Vui lòng thử lại.' : 'Không thể thêm học kỳ. Vui lòng thử lại.');
+      console.error('Error saving semester:', error);
+    } finally {
+      setIsLoadingSemesters(false);
+    }
+  };
+
+  const handleEditSemester = (semester) => {
+    setEditingSemester(semester);
+    setNewSemester({ code: semester.code, name: semester.name });
+    setShowSemesterModal(true);
+  };
+
+  const handleDeleteSemester = async (semesterId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa học kỳ này?')) {
+      return;
+    }
+    setIsLoadingSemesters(true);
+    setSemestersError(null);
+    try {
+      await semesterService.deleteSemester(semesterId);
+      setSemesters(semesters.filter(s => s.id !== semesterId));
+    } catch (error) {
+      setSemestersError('Không thể xóa học kỳ. Vui lòng thử lại.');
+      console.error('Error deleting semester:', error);
+    } finally {
+      setIsLoadingSemesters(false);
+    }
   };
 
   const handleAddExam = (e) => {
@@ -193,218 +330,63 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
     }
   };
 
-  const handleImportCriteria = (e) => {
+  const handleImportCriteria = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = new Uint8Array(event.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        
-        console.log('========== IMPORT CRITERIA DEBUG ==========');
-        console.log('File name:', file.name);
-        console.log('Sheet name:', sheetName);
-        
-        // Đọc toàn bộ dữ liệu dạng array (không bỏ dòng nào)
-        const jsonDataAsArray = XLSX.utils.sheet_to_json(worksheet, { 
-          header: 1, // Đọc dạng array
-          raw: false,
-          defval: ''
-        });
-        
-        console.log('Raw data as array (all rows):', jsonDataAsArray);
-        console.log('Total rows:', jsonDataAsArray.length);
-        
-        if (jsonDataAsArray.length === 0) {
-          alert('File Excel trống hoặc không đúng định dạng!');
-          return;
-        }
-        
-        // Lọc bỏ các dòng trống
-        const filteredData = jsonDataAsArray.filter(row => {
-          return row && row.length > 0 && row.some(cell => cell && String(cell).trim() !== '');
-        });
-        
-        console.log('Filtered data (removed empty rows):', filteredData);
-        console.log('Valid rows:', filteredData.length);
-        
-        if (filteredData.length === 0) {
-          alert('File Excel không có dữ liệu hợp lệ!');
-          return;
-        }
-        
-        // Phát hiện xem có header hay không
-        // Kiểm tra dòng đầu tiên: nếu cột thứ 2 là số thì KHÔNG có header
-        let hasHeader = false;
-        let dataRows = filteredData;
-        
-        if (filteredData.length > 0 && filteredData[0].length >= 2) {
-          const firstRow = filteredData[0];
-          const secondColumn = firstRow[1];
-          
-          // Nếu cột thứ 2 của dòng đầu là số -> không có header (cột 2 là điểm)
-          // Nếu cột thứ 2 là text -> có header
-          const isNumber = secondColumn && !isNaN(parseFloat(String(secondColumn).trim()));
-          
-          if (!isNumber) {
-            // Có thể là header
-            const possibleHeaderNames = [
-              'tiêu chí', 'criteria', 'name', 'tieu chi', 'nội dung', 'content',
-              'điểm', 'score', 'max score', 'điểm tối đa', 'diem', 'point'
-            ];
-            
-            // Kiểm tra xem dòng đầu có chứa các từ khóa header không
-            const firstRowText = firstRow.map(cell => String(cell).toLowerCase().trim()).join(' ');
-            const hasHeaderKeywords = possibleHeaderNames.some(keyword => firstRowText.includes(keyword));
-            
-            if (hasHeaderKeywords) {
-              hasHeader = true;
-              dataRows = filteredData.slice(1); // Bỏ dòng header
-              console.log('✓ Detected: File has HEADER row');
-              console.log('Header row:', firstRow);
-              console.log('Data rows (without header):', dataRows);
-            } else {
-              console.log('✓ Detected: File has NO header (first row is data)');
-            }
-          } else {
-            console.log('✓ Detected: File has NO header (second column is numeric)');
-          }
-        }
-        
-        console.log('Final data to process:', dataRows);
-        console.log('Has header:', hasHeader);
+    if (!file.name.endsWith('.xlsx')) {
+      alert('Vui lòng chọn file Excel (.xlsx)!');
+      return;
+    }
 
-        const criteria = dataRows.map((row, index) => {
-          console.log(`\n----- Processing Row ${index + 1} -----`);
-          console.log('Raw row data:', row);
-          
-          let order = null;
-          let name = '';
-          let maxScore = null;
-          let description = '';
-          
-          // Row luôn là array: [column1, column2, column3, column4, ...]
-          if (Array.isArray(row)) {
-            // Kiểm tra xem cột đầu tiên có phải là số (order) không
-            if (row[0] && !isNaN(parseFloat(String(row[0]).trim()))) {
-              // Format: Order | Tiêu chí | Điểm | Mô tả
-              order = parseInt(String(row[0]).trim());
-              console.log(`✓ Order from column A (index 0): ${order}`);
-              
-              // Cột thứ 2 là tên tiêu chí
-              if (row[1] && String(row[1]).trim() !== '') {
-                name = String(row[1]).trim();
-                console.log(`✓ Name from column B (index 1): "${name}"`);
-              }
-              
-              // Cột thứ 3 là điểm
-              if (row[2] && String(row[2]).trim() !== '') {
-                const scoreStr = String(row[2]).trim();
-                const parsed = parseFloat(scoreStr);
-                if (!isNaN(parsed)) {
-                  maxScore = parsed;
-                  console.log(`✓ Score from column C (index 2): ${maxScore}`);
-                }
-              }
-              
-              // Cột thứ 4 là mô tả (nếu có)
-              if (row[3] && String(row[3]).trim() !== '') {
-                description = String(row[3]).trim();
-                console.log(`✓ Description from column D (index 3): "${description}"`);
-              }
-            } else {
-              // Format cũ: Tiêu chí | Điểm | Mô tả (không có order)
-              console.log('Format: No order column detected');
-              
-              // Cột đầu tiên là tên tiêu chí
-              if (row[0] && String(row[0]).trim() !== '') {
-                name = String(row[0]).trim();
-                console.log(`✓ Name from column A (index 0): "${name}"`);
-              }
-              
-              // Cột thứ 2 là điểm
-              if (row[1] && String(row[1]).trim() !== '') {
-                const scoreStr = String(row[1]).trim();
-                const parsed = parseFloat(scoreStr);
-                if (!isNaN(parsed)) {
-                  maxScore = parsed;
-                  console.log(`✓ Score from column B (index 1): ${maxScore}`);
-                }
-              }
-              
-              // Cột thứ 3 là mô tả (nếu có)
-              if (row[2] && String(row[2]).trim() !== '') {
-                description = String(row[2]).trim();
-                console.log(`✓ Description from column C (index 2): "${description}"`);
-              }
-              
-              // Sử dụng index + 1 làm order mặc định
-              order = index + 1;
-            }
-          }
-          
-          // Fallback values
-          if (!name) {
-            name = `Tiêu chí ${index + 1}`;
-            console.log(`⚠ No name found, using default: "${name}"`);
-          }
-          
-          if (maxScore === null || isNaN(maxScore)) {
-            maxScore = 10;
-            console.log(`⚠ No valid score found, using default: ${maxScore}`);
-          }
-          
-          if (order === null) {
-            order = index + 1;
-            console.log(`⚠ No order found, using default: ${order}`);
-          }
+    if (!selectedExam) {
+      alert('Vui lòng chọn kỳ thi trước!');
+      return;
+    }
 
-          const criteriaObj = {
-            id: index + 1,
-            order: order,
-            name: name,
-            maxScore: maxScore,
-            description: description
-          };
-          
-          console.log('✓ Final criteria object:', criteriaObj);
-          return criteriaObj;
-        });
+    setIsUploadingCriteria(true);
+    setCriteriaError(null);
 
-        console.log('\n========== FINAL PARSED CRITERIA ==========');
-        console.log('Total criteria:', criteria.length);
-        criteria.forEach((c, idx) => {
-          console.log(`${idx + 1}. ${c.name} - ${c.maxScore} điểm`);
-        });
-        console.log('===========================================\n');
+    try {
+      console.log('Uploading criteria for exam:', selectedExam);
 
-        // Cập nhật state
-        const updatedExams = exams.map(exam => 
-          exam.id === selectedExam.id 
-            ? { ...exam, gradingCriteria: criteria }
-            : exam
-        );
-        
-        setExams(updatedExams);
-        
-        console.log('Updated exam with criteria:', updatedExams.find(e => e.id === selectedExam.id));
+      const response = await fileService.importCriteria(file, selectedExam.id);
 
-        // Alert chi tiết
-        const criteriaList = criteria.map(c => `  • ${c.name}: ${c.maxScore} điểm`).join('\n');
-        alert(`✓ Đã import thành công ${criteria.length} tiêu chí!\n\nCác tiêu chí:\n${criteriaList}`);
-        
-        setShowCriteriaModal(false);
-        setSelectedExam(null);
-      } catch (error) {
-        console.error('❌ Error importing Excel:', error);
-        alert('Lỗi khi đọc file Excel: ' + error.message + '\n\nVui lòng kiểm tra console để xem chi tiết.');
-      }
-    };
-    reader.readAsArrayBuffer(file);
+      console.log('Import criteria API response:', response);
+
+      // Map API response to UI format
+      const importedCriteria = response.criterias.map((c, index) => ({
+        id: c.criteriaId || index + 1,
+        order: c.sortOrder || index + 1,
+        name: c.criteriaName,
+        maxScore: c.maxScore,
+        description: c.description || ''
+      }));
+
+      // Update exam with imported criteria
+      const updatedExams = exams.map(exam => 
+        exam.id === selectedExam.id 
+          ? { ...exam, gradingCriteria: importedCriteria }
+          : exam
+      );
+      
+      setExams(updatedExams);
+
+      // Success alert
+      const criteriaList = importedCriteria.map(c => `  • ${c.name}: ${c.maxScore} điểm`).join('\n');
+      alert(`✓ Đã import thành công ${response.importedCount} tiêu chí!\n\nCác tiêu chí:\n${criteriaList}`);
+      
+      setShowCriteriaModal(false);
+      setSelectedExam(null);
+    } catch (error) {
+      console.error('Error importing criteria:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Không thể import tiêu chí';
+      setCriteriaError(errorMessage);
+      alert(`❌ Lỗi: ${errorMessage}`);
+    } finally {
+      setIsUploadingCriteria(false);
+      e.target.value = ''; // Reset file input
+    }
   };
 
   const getSubjectName = (subjectId) => {
@@ -453,8 +435,17 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon exam-icon">
+            <div className="stat-icon semester-icon">
               <Calendar size={24} />
+            </div>
+            <div className="stat-info">
+              <h3>{semesters.length}</h3>
+              <p>Học kỳ</p>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon exam-icon">
+              <FileSpreadsheet size={24} />
             </div>
             <div className="stat-info">
               <h3>{exams.length}</h3>
@@ -477,32 +468,140 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
           <div className="section-header">
             <h2>Danh sách Môn học</h2>
             <button 
-              onClick={() => setShowSubjectModal(true)}
+              onClick={() => {
+                setEditingSubject(null);
+                setNewSubject({ code: '', name: '' });
+                setShowSubjectModal(true);
+              }}
               className="btn btn-primary"
+              disabled={isLoadingSubjects}
             >
               <Plus size={18} />
               Thêm môn học
             </button>
           </div>
+          {subjectsError && (
+            <div className="error-message">
+              <AlertCircle size={18} />
+              {subjectsError}
+            </div>
+          )}
           <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Mã môn học</th>
-                  <th>Tên môn học</th>
-                  <th>Số lượng kỳ thi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subjects.map(subject => (
-                  <tr key={subject.id}>
-                    <td><strong>{subject.code}</strong></td>
-                    <td>{subject.name}</td>
-                    <td>{exams.filter(e => e.subjectId === subject.id).length}</td>
+            {isLoadingSubjects && subjects.length === 0 ? (
+              <div className="loading-container">
+                <Loader2 size={32} className="spinner" />
+                <p>Đang tải danh sách môn học...</p>
+              </div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mã môn học</th>
+                    <th>Tên môn học</th>
+                    <th>Số lượng kỳ thi</th>
+                    <th>Thao tác</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {subjects.map(subject => (
+                    <tr key={subject.id}>
+                      <td><strong>{subject.code}</strong></td>
+                      <td>{subject.name}</td>
+                      <td>{exams.filter(e => e.subjectId === subject.id).length}</td>
+                      <td>
+                        <div className="action-buttons">
+                          <button
+                            onClick={() => handleEditSubject(subject)}
+                            className="btn btn-secondary btn-sm"
+                            disabled={isLoadingSubjects}
+                          >
+                            Sửa
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSubject(subject.id)}
+                            className="btn btn-danger btn-sm"
+                            disabled={isLoadingSubjects}
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Semesters Section */}
+        <div className="section">
+          <div className="section-header">
+            <h2>Danh sách Học kỳ</h2>
+            <button 
+              onClick={() => {
+                setEditingSemester(null);
+                setNewSemester({ code: '', name: '' });
+                setShowSemesterModal(true);
+              }}
+              className="btn btn-primary"
+              disabled={isLoadingSemesters}
+            >
+              <Plus size={18} />
+              Thêm học kỳ
+            </button>
+          </div>
+          {semestersError && (
+            <div className="error-message">
+              <AlertCircle size={18} />
+              {semestersError}
+            </div>
+          )}
+          <div className="table-container">
+            {isLoadingSemesters && semesters.length === 0 ? (
+              <div className="loading-container">
+                <Loader2 size={32} className="spinner" />
+                <p>Đang tải danh sách học kỳ...</p>
+              </div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Mã học kỳ</th>
+                    <th>Tên học kỳ</th>
+                    {/* <th>Số lượng kỳ thi</th> */}
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {semesters.map(semester => (
+                    <tr key={semester.id}>
+                      <td><strong>{semester.code}</strong></td>
+                      <td>{semester.name || '-'}</td>
+                      {/* <td>{exams.filter(e => e.semester === semester.code).length}</td> */}
+                      <td>
+                        <div className="action-buttons">
+                          <button
+                            onClick={() => handleEditSemester(semester)}
+                            className="btn btn-secondary btn-sm"
+                            disabled={isLoadingSemesters}
+                          >
+                            Sửa
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSemester(semester.id)}
+                            className="btn btn-danger btn-sm"
+                            disabled={isLoadingSemesters}
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
@@ -592,37 +691,118 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
         <div className="modal-overlay" onClick={() => setShowSubjectModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Thêm Môn học mới</h2>
-              <button className="close-btn" onClick={() => setShowSubjectModal(false)}>
+              <h2>{editingSubject ? 'Chỉnh sửa Môn học' : 'Thêm Môn học mới'}</h2>
+              <button className="close-btn" onClick={() => {
+                setShowSubjectModal(false);
+                setEditingSubject(null);
+                setNewSubject({ code: '', name: '' });
+              }}>
                 ×
               </button>
             </div>
-            <form onSubmit={handleAddSubject}>
-              <div className="form-group">
-                <label>Mã môn học</label>
-                <input
-                  type="text"
-                  value={newSubject.code}
-                  onChange={(e) => setNewSubject({ ...newSubject, code: e.target.value })}
-                  placeholder="VD: SWD392"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Tên môn học</label>
-                <input
-                  type="text"
-                  value={newSubject.name}
-                  onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })}
-                  placeholder="VD: Software Architecture and Design"
-                  required
-                />
-              </div>
-              <button type="submit" className="btn btn-primary">
-                <Plus size={18} />
-                Thêm môn học
+            <div className="modal-body">
+              <form onSubmit={handleAddSubject} className="modal-form">
+                <div className="form-group">
+                  <label>
+                    <BookOpen size={16} />
+                    Mã môn học
+                  </label>
+                  <input
+                    type="text"
+                    value={newSubject.code}
+                    onChange={(e) => setNewSubject({ ...newSubject, code: e.target.value })}
+                    placeholder="VD: SWD392"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>
+                    <FileText size={16} />
+                    Tên môn học
+                  </label>
+                  <input
+                    type="text"
+                    value={newSubject.name}
+                    onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })}
+                    placeholder="VD: Software Architecture and Design"
+                    required
+                  />
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => {
+                    setShowSubjectModal(false);
+                    setEditingSubject(null);
+                    setNewSubject({ code: '', name: '' });
+                  }}>
+                    Hủy
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={isLoadingSubjects}>
+                    <Plus size={18} />
+                    {editingSubject ? 'Cập nhật' : 'Thêm môn học'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Semester Modal */}
+      {showSemesterModal && (
+        <div className="modal-overlay" onClick={() => setShowSemesterModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingSemester ? 'Chỉnh sửa Học kỳ' : 'Thêm Học kỳ mới'}</h2>
+              <button className="close-btn" onClick={() => {
+                setShowSemesterModal(false);
+                setEditingSemester(null);
+                setNewSemester({ code: '', name: '' });
+              }}>
+                ×
               </button>
-            </form>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleAddSemester} className="modal-form">
+                <div className="form-group">
+                  <label>
+                    <Calendar size={16} />
+                    Mã học kỳ
+                  </label>
+                  <input
+                    type="text"
+                    value={newSemester.code}
+                    onChange={(e) => setNewSemester({ ...newSemester, code: e.target.value })}
+                    placeholder="VD: SU25, FA24"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>
+                    <FileText size={16} />
+                    Tên học kỳ (tùy chọn)
+                  </label>
+                  <input
+                    type="text"
+                    value={newSemester.name}
+                    onChange={(e) => setNewSemester({ ...newSemester, name: e.target.value })}
+                    placeholder="VD: Summer 2025"
+                  />
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => {
+                    setShowSemesterModal(false);
+                    setEditingSemester(null);
+                    setNewSemester({ code: '', name: '' });
+                  }}>
+                    Hủy
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={isLoadingSemesters}>
+                    <Plus size={18} />
+                    {editingSemester ? 'Cập nhật' : 'Thêm học kỳ'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -637,75 +817,106 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
                 ×
               </button>
             </div>
-            <form onSubmit={handleAddExam}>
-              <div className="form-group">
-                <label>Môn học</label>
-                <select
-                  value={newExam.subjectId}
-                  onChange={(e) => setNewExam({ ...newExam, subjectId: e.target.value })}
-                  required
-                >
-                  <option value="">-- Chọn môn học --</option>
-                  {subjects.map(subject => (
-                    <option key={subject.id} value={subject.id}>
-                      {subject.code} - {subject.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Học kỳ</label>
-                <input
-                  type="text"
-                  value={newExam.semester}
-                  onChange={(e) => setNewExam({ ...newExam, semester: e.target.value })}
-                  placeholder="VD: SU25, FA24"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Loại thi</label>
-                <select
-                  value={newExam.type}
-                  onChange={(e) => setNewExam({ ...newExam, type: e.target.value })}
-                  required
-                >
-                  <option value="PE">PE - Practical Exam</option>
-                  <option value="FE">FE - Final Exam</option>
-                  <option value="TE">TE - Theory Exam</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Slot</label>
-                <input
-                  type="number"
-                  value={newExam.slot}
-                  onChange={(e) => setNewExam({ ...newExam, slot: e.target.value })}
-                  placeholder="VD: 1, 2, 3"
-                  min="1"
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Giáo viên chấm bài</label>
-                <select
-                  value={newExam.teacherId}
-                  onChange={(e) => setNewExam({ ...newExam, teacherId: e.target.value })}
-                  required
-                >
-                  <option value="">-- Chọn giáo viên --</option>
-                  {teachers.map(teacher => (
-                    <option key={teacher.id} value={teacher.id}>
-                      {teacher.name} - {teacher.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button type="submit" className="btn btn-primary">
-                <Plus size={18} />
-                Tạo kỳ thi
-              </button>
-            </form>
+            <div className="modal-body">
+              <form onSubmit={handleAddExam} className="modal-form">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>
+                      <BookOpen size={16} />
+                      Môn học
+                    </label>
+                    <select
+                      value={newExam.subjectId}
+                      onChange={(e) => setNewExam({ ...newExam, subjectId: e.target.value })}
+                      required
+                    >
+                      <option value="">-- Chọn môn học --</option>
+                      {subjects.map(subject => (
+                        <option key={subject.id} value={subject.id}>
+                          {subject.code} - {subject.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>
+                      <Calendar size={16} />
+                      Học kỳ
+                    </label>
+                    <select
+                      value={newExam.semester}
+                      onChange={(e) => setNewExam({ ...newExam, semester: e.target.value })}
+                      required
+                    >
+                      <option value="">-- Chọn học kỳ --</option>
+                      {semesters.map(semester => (
+                        <option key={semester.id} value={semester.code}>
+                          {semester.code}{semester.name ? ` - ${semester.name}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>
+                      <FileText size={16} />
+                      Loại thi
+                    </label>
+                    <select
+                      value={newExam.type}
+                      onChange={(e) => setNewExam({ ...newExam, type: e.target.value })}
+                      required
+                    >
+                      <option value="PE">PE - Practical Exam</option>
+                      <option value="FE">FE - Final Exam</option>
+                      <option value="TE">TE - Theory Exam</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>
+                      <Archive size={16} />
+                      Slot
+                    </label>
+                    <input
+                      type="number"
+                      value={newExam.slot}
+                      onChange={(e) => setNewExam({ ...newExam, slot: e.target.value })}
+                      placeholder="VD: 1, 2, 3"
+                      min="1"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>
+                    <Users size={16} />
+                    Giáo viên chấm bài
+                  </label>
+                  <select
+                    value={newExam.teacherId}
+                    onChange={(e) => setNewExam({ ...newExam, teacherId: e.target.value })}
+                    required
+                  >
+                    <option value="">-- Chọn giáo viên --</option>
+                    {teachers.map(teacher => (
+                      <option key={teacher.id} value={teacher.id}>
+                        {teacher.name} - {teacher.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowExamModal(false)}>
+                    Hủy
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    <Plus size={18} />
+                    Tạo kỳ thi
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
@@ -722,17 +933,37 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
             </div>
             <div className="import-section">
               <p>Kỳ thi: <strong>{getSubjectName(selectedExam.subjectId)} - {selectedExam.semester}</strong></p>
-              <div className="upload-area">
-                <FileSpreadsheet size={48} />
-                <h3>Chọn file Excel</h3>
-                <p>File Excel cần có các cột: Tiêu chí, Điểm tối đa, Mô tả</p>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={handleImportCriteria}
-                  className="file-input"
-                />
-              </div>
+              
+              {isUploadingCriteria ? (
+                <div className="upload-progress">
+                  <div className="loading-spinner"></div>
+                  <p>Đang upload và xử lý file...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="upload-area">
+                    <FileSpreadsheet size={48} />
+                    <h3>Chọn file Excel</h3>
+                    <p>File Excel cần có 3 cột: <strong>Order</strong> (Số thứ tự), <strong>Criteria</strong> (Tiêu chí), <strong>Score</strong> (Điểm)</p>
+                    <p className="format-note">Ví dụ: 1 | Thiết kế kiến trúc | 2</p>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleImportCriteria}
+                      className="file-input"
+                      disabled={isUploadingCriteria}
+                    />
+                  </div>
+                  
+                  {criteriaError && (
+                    <div className="error-message">
+                      <AlertCircle size={20} />
+                      <span>{criteriaError}</span>
+                    </div>
+                  )}
+                </>
+              )}
+              
               {selectedExam.gradingCriteria.length > 0 && (
                 <div className="criteria-preview">
                   <h4>Tiêu chí hiện tại ({selectedExam.gradingCriteria.length}):</h4>
