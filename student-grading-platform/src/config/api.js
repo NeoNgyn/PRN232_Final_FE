@@ -6,6 +6,14 @@ export const API_ENDPOINTS = {
     GOOGLE_LOGIN: `${API_BASE_URL}/api/v1/auth/google-login`,
     REFRESH_TOKEN: `${API_BASE_URL}/api/v1/auth/refresh-token`,
     LOGOUT: `${API_BASE_URL}/api/v1/auth/refresh-token`
+  },
+  CRITERIA: {
+    GET_ALL: `${API_BASE_URL}/api/v1/criterias`,
+    QUERY: `${API_BASE_URL}/api/v1/criterias/query`,
+    GET_BY_ID: (id) => `${API_BASE_URL}/api/v1/criterias/${id}`,
+    CREATE: `${API_BASE_URL}/api/v1/criterias`,
+    UPDATE: (id) => `${API_BASE_URL}/api/v1/criterias/${id}`,
+    DELETE: (id) => `${API_BASE_URL}/api/v1/criterias/${id}`
   }
 };
 

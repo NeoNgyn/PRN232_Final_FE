@@ -5,6 +5,7 @@ import {
   AlertCircle, ChevronLeft, ChevronRight 
 } from 'lucide-react';
 import mammoth from 'mammoth';
+import * as criteriaService from '../services/criteriaService';
 import './GradingPage.css';
 
 function GradingPage({ user, onLogout, exams, setExams, subjects }) {
@@ -23,6 +24,11 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   const [compareDocumentContent, setCompareDocumentContent] = useState('');
   const [isLoadingCompareDocument, setIsLoadingCompareDocument] = useState(false);
   const [similarityScore, setSimilarityScore] = useState(null);
+  
+  // Criteria API states
+  const [criteriaList, setCriteriaList] = useState([]);
+  const [isLoadingCriteria, setIsLoadingCriteria] = useState(false);
+  const [criteriaError, setCriteriaError] = useState(null);
   
   // Violation Report states
   const [violations, setViolations] = useState([]);
@@ -89,6 +95,36 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       setIsLoadingDocument(false);
     }
   };
+
+  // Fetch criteria from API
+  useEffect(() => {
+    const fetchCriteria = async () => {
+      if (!exam) return;
+      
+      setIsLoadingCriteria(true);
+      setCriteriaError(null);
+      
+      try {
+        console.log('Fetching criteria for exam ID:', exam.id);
+        // Fetch all criteria, filter by examId if needed
+        const data = await criteriaService.getAllCriteria({ examId: exam.id });
+        console.log('Criteria fetched successfully:', data);
+        setCriteriaList(data || []);
+      } catch (error) {
+        console.error('Error fetching criteria:', error);
+        setCriteriaError(error.message || 'Không thể tải danh sách tiêu chí');
+        // Fallback to hardcoded criteria from exam prop if API fails
+        if (exam.gradingCriteria) {
+          console.log('Using fallback criteria from exam prop');
+          setCriteriaList(exam.gradingCriteria);
+        }
+      } finally {
+        setIsLoadingCriteria(false);
+      }
+    };
+
+    fetchCriteria();
+  }, [exam]);
 
   // Load document when selected student changes
   useEffect(() => {
@@ -324,8 +360,11 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       return;
     }
 
+    // Use criteriaList from API instead of hardcoded data
+    const activeCriteria = criteriaList.length > 0 ? criteriaList : (exam.gradingCriteria || []);
+    
     // Check if all criteria are scored
-    const allScored = exam.gradingCriteria.every(c => scores[c.id] !== undefined);
+    const allScored = activeCriteria.every(c => scores[c.id] !== undefined);
     if (!allScored) {
       alert('Vui lòng chấm điểm đầy đủ tất cả các tiêu chí!');
       return;
@@ -390,7 +429,9 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     }
   };
 
-  const totalMaxScore = exam.gradingCriteria?.reduce((sum, c) => sum + c.maxScore, 0) || 0;
+  // Use criteriaList from API, fallback to exam.gradingCriteria
+  const activeCriteria = criteriaList.length > 0 ? criteriaList : (exam.gradingCriteria || []);
+  const totalMaxScore = activeCriteria.reduce((sum, c) => sum + (c.maxScore || 0), 0);
 
   return (
     <div className="grading-page">
@@ -586,8 +627,27 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   </div>
                 </div>
 
+                {/* Loading state */}
+                {isLoadingCriteria && (
+                  <div className="criteria-loading">
+                    <div className="loading-spinner"></div>
+                    <p>Đang tải tiêu chí chấm điểm...</p>
+                  </div>
+                )}
+
+                {/* Error state */}
+                {criteriaError && !isLoadingCriteria && (
+                  <div className="criteria-error">
+                    <AlertCircle size={24} />
+                    <p>{criteriaError}</p>
+                    {exam.gradingCriteria && exam.gradingCriteria.length > 0 && (
+                      <p className="fallback-note">Đang sử dụng dữ liệu dự phòng</p>
+                    )}
+                  </div>
+                )}
+
                 <div className="criteria-list">
-                  {exam.gradingCriteria.map((criteria) => (
+                  {!isLoadingCriteria && (criteriaList.length > 0 ? criteriaList : exam.gradingCriteria || []).map((criteria) => (
                     <div key={criteria.id} className="criteria-item">
                       <div className="criteria-header">
                         <div className="criteria-title-group">
