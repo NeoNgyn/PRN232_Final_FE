@@ -1,12 +1,15 @@
-import axiosInstance from '../config/axiosConfig';
+import axios from 'axios';
+import { API_ENDPOINTS } from '../config/api';
 
 const subjectService = {
   // Get all subjects
   getAllSubjects: async () => {
     try {
-      const response = await axiosInstance.get('/subjects');
+      const response = await axios.get(API_ENDPOINTS.SUBJECTS.GET_ALL);
+      // API returns: { status_code, message, reason, is_success, data }
+      const subjects = response.data.data || [];
       // Map API response to UI format
-      return response.map(subject => ({
+      return subjects.map(subject => ({
         id: subject.subjectId,
         code: subject.subjectCode,
         name: subject.subjectName
@@ -20,11 +23,12 @@ const subjectService = {
   // Get subject by ID
   getSubjectById: async (id) => {
     try {
-      const response = await axiosInstance.get(`/subjects/${id}`);
+      const response = await axios.get(`${API_ENDPOINTS.SUBJECTS.GET_BY_ID}/${id}`);
+      const subject = response.data.data;
       return {
-        id: response.subjectId,
-        code: response.subjectCode,
-        name: response.subjectName
+        id: subject.subjectId,
+        code: subject.subjectCode,
+        name: subject.subjectName
       };
     } catch (error) {
       console.error('Error fetching subject:', error);
@@ -40,12 +44,13 @@ const subjectService = {
         subjectCode: subjectData.code,
         subjectName: subjectData.name
       };
-      const response = await axiosInstance.post('/subjects', apiData);
+      const response = await axios.post(API_ENDPOINTS.SUBJECTS.CREATE, apiData);
+      const subject = response.data.data;
       // Map response back to UI format
       return {
-        id: response.subjectId,
-        code: response.subjectCode,
-        name: response.subjectName
+        id: subject.subjectId,
+        code: subject.subjectCode,
+        name: subject.subjectName
       };
     } catch (error) {
       console.error('Error creating subject:', error);
@@ -61,12 +66,13 @@ const subjectService = {
         subjectCode: subjectData.code,
         subjectName: subjectData.name
       };
-      const response = await axiosInstance.put(`/subjects/${id}`, apiData);
+      const response = await axios.put(`${API_ENDPOINTS.SUBJECTS.UPDATE}/${id}`, apiData);
+      const subject = response.data.data;
       // Map response back to UI format
       return {
-        id: response.subjectId,
-        code: response.subjectCode,
-        name: response.subjectName
+        id: subject.subjectId,
+        code: subject.subjectCode,
+        name: subject.subjectName
       };
     } catch (error) {
       console.error('Error updating subject:', error);
@@ -77,7 +83,7 @@ const subjectService = {
   // Delete subject
   deleteSubject: async (id) => {
     try {
-      await axiosInstance.delete(`/subjects/${id}`);
+      await axios.delete(`${API_ENDPOINTS.SUBJECTS.DELETE}/${id}`);
       return true;
     } catch (error) {
       console.error('Error deleting subject:', error);

@@ -1,12 +1,13 @@
-import axiosInstance from '../config/axiosConfig';
+import axios from '../config/axiosConfig';
+import { API_ENDPOINTS } from '../config/api';
 
 const semesterService = {
   // Get all semesters
   getAllSemesters: async () => {
     try {
-      const response = await axiosInstance.get('/semesters');
+      const response = await axios.get(API_ENDPOINTS.SEMESTERS.GET_ALL);
       // Map API response to UI format
-      return response.map(semester => ({
+      return (response.data.data || []).map(semester => ({
         id: semester.semesterId,
         code: semester.semesterCode,
         name: semester.semesterName || ''
@@ -20,7 +21,7 @@ const semesterService = {
   // Get semester by ID
   getSemesterById: async (id) => {
     try {
-      const response = await axiosInstance.get(`/semesters/${id}`);
+      const response = await axios.get(API_ENDPOINTS.SEMESTERS.GET_BY_ID(id));
       return {
         id: response.semesterId,
         code: response.semesterCode,
@@ -40,12 +41,13 @@ const semesterService = {
         semesterCode: semesterData.code,
         semesterName: semesterData.name || null
       };
-      const response = await axiosInstance.post('/semesters', apiData);
+      const response = await axios.post(API_ENDPOINTS.SEMESTERS.CREATE, apiData);
       // Map response back to UI format
+      const data = response.data.data;
       return {
-        id: response.semesterId,
-        code: response.semesterCode,
-        name: response.semesterName || ''
+        id: data.semesterId,
+        code: data.semesterCode,
+        name: data.semesterName || ''
       };
     } catch (error) {
       console.error('Error creating semester:', error);
@@ -61,12 +63,13 @@ const semesterService = {
         semesterCode: semesterData.code,
         semesterName: semesterData.name || null
       };
-      const response = await axiosInstance.put(`/semesters/${id}`, apiData);
+      const response = await axios.put(API_ENDPOINTS.SEMESTERS.UPDATE(id), apiData);
       // Map response back to UI format
+      const data = response.data.data;
       return {
-        id: response.semesterId,
-        code: response.semesterCode,
-        name: response.semesterName || ''
+        id: data.semesterId,
+        code: data.semesterCode,
+        name: data.semesterName || ''
       };
     } catch (error) {
       console.error('Error updating semester:', error);
@@ -77,7 +80,7 @@ const semesterService = {
   // Delete semester
   deleteSemester: async (id) => {
     try {
-      await axiosInstance.delete(`/semesters/${id}`);
+      await axios.delete(API_ENDPOINTS.SEMESTERS.DELETE(id));
       return true;
     } catch (error) {
       console.error('Error deleting semester:', error);

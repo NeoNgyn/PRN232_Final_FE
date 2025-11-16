@@ -9,11 +9,9 @@
  */
 
 import axios from 'axios';
-import API_BASE_URL from './api';
 
-// Create axios instance
+// Create axios instance without baseURL - we'll use full URLs
 const axiosInstance = axios.create({
-  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -49,9 +47,8 @@ axiosInstance.interceptors.response.use(
       console.log(`[API Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
     }
     
-    // Extract data from ApiResponse wrapper
-    // Backend returns: { data: T, statusCode: number, message: string }
-    return response.data.data !== undefined ? response.data.data : response.data;
+    // Return full response - let services handle data extraction
+    return response;
   },
   (error) => {
     // Log error in development

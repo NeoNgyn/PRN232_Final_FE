@@ -3,7 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
+import ManagerDashboard from './pages/ManagerDashboard';
 import GradingPage from './pages/GradingPage';
+import ViolationManagement from './pages/ViolationManagement';
 import './App.css';
 
 // Initial mock subjects
@@ -69,6 +71,8 @@ function App() {
               user ? (
                 user.role === 'admin' ? (
                   <Navigate to="/admin" />
+                ) : user.role === 'manager' ? (
+                  <Navigate to="/manager" />
                 ) : (
                   <Navigate to="/teacher" />
                 )
@@ -91,6 +95,19 @@ function App() {
                   teachers={teachers}
                   semesters={semesters}
                   setSemesters={setSemesters}
+                />
+              ) : (
+                <Navigate to="/" />
+              )
+            } 
+          />
+          <Route 
+            path="/manager" 
+            element={
+              user && user.role === 'manager' ? (
+                <ManagerDashboard 
+                  user={user} 
+                  onLogout={handleLogout}
                 />
               ) : (
                 <Navigate to="/" />
@@ -122,6 +139,19 @@ function App() {
                   exams={exams}
                   setExams={setExams}
                   subjects={subjects}
+                />
+              ) : (
+                <Navigate to="/" />
+              )
+            } 
+          />
+          <Route 
+            path="/violations" 
+            element={
+              user && (user.role === 'teacher' || user.role === 'manager' || user.role === 'admin') ? (
+                <ViolationManagement 
+                  user={user} 
+                  onLogout={handleLogout}
                 />
               ) : (
                 <Navigate to="/" />

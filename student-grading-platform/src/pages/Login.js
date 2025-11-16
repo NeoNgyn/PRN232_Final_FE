@@ -8,6 +8,7 @@ const mockUsers = [
   { id: 1, username: 'admin', password: 'admin123', role: 'admin', name: 'Administrator' },
   { id: 2, username: 'teacher1', password: 'teacher123', role: 'teacher', name: 'Nguyễn Văn A' },
   { id: 3, username: 'teacher2', password: 'teacher123', role: 'teacher', name: 'Trần Thị B' },
+  { id: 4, username: 'manager', password: 'manager123', role: 'manager', name: 'Quản lý' },
 ];
 
 function Login({ onLogin }) {
