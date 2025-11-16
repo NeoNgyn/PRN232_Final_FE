@@ -4,7 +4,7 @@ const semesterService = {
   // Get all semesters
   getAllSemesters: async () => {
     try {
-      const response = await axiosInstance.get('/semesters');
+      const response = await axiosInstance.get('/api/v1/semesters');
       // Map API response to UI format
       return response.map(semester => ({
         id: semester.semesterId,
@@ -20,7 +20,7 @@ const semesterService = {
   // Get semester by ID
   getSemesterById: async (id) => {
     try {
-      const response = await axiosInstance.get(`/semesters/${id}`);
+      const response = await axiosInstance.get(`/api/v1/semesters/${id}`);
       return {
         id: response.semesterId,
         code: response.semesterCode,
@@ -40,7 +40,7 @@ const semesterService = {
         semesterCode: semesterData.code,
         semesterName: semesterData.name || null
       };
-      const response = await axiosInstance.post('/semesters', apiData);
+      const response = await axiosInstance.post('/api/v1/semesters', apiData);
       // Map response back to UI format
       return {
         id: response.semesterId,
@@ -61,7 +61,7 @@ const semesterService = {
         semesterCode: semesterData.code,
         semesterName: semesterData.name || null
       };
-      const response = await axiosInstance.put(`/semesters/${id}`, apiData);
+      const response = await axiosInstance.put(`/api/v1/semesters/${id}`, apiData);
       // Map response back to UI format
       return {
         id: response.semesterId,
@@ -77,7 +77,7 @@ const semesterService = {
   // Delete semester
   deleteSemester: async (id) => {
     try {
-      await axiosInstance.delete(`/semesters/${id}`);
+      await axiosInstance.delete(`/api/v1/semesters/${id}`);
       return true;
     } catch (error) {
       console.error('Error deleting semester:', error);

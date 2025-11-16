@@ -1006,6 +1006,17 @@
   box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
 }
 
+.btn-criteria-action.btn-update {
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  color: #2d3748;
+  font-weight: 600;
+}
+
+.btn-criteria-action.btn-update:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(252, 182, 159, 0.4);
+}
+
 .criteria-description {
   color: #718096;
   font-size: 13px;
