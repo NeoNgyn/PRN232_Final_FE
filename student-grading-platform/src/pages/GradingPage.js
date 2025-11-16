@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import mammoth from 'mammoth';
 import * as criteriaService from '../services/criteriaService';
+import gradeService from '../services/gradeService';
 import './GradingPage.css';
 
 function GradingPage({ user, onLogout, exams, setExams, subjects }) {
@@ -17,18 +18,22 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   const [scores, setScores] = useState({});
   const [notes, setNotes] = useState({});
   const [addedCriteria, setAddedCriteria] = useState({}); // Track which criteria have been added
+  const [gradeIds, setGradeIds] = useState({}); // Track grade IDs for each criteria (for updates)
   const [gradedSubmissions, setGradedSubmissions] = useState([]);
+  const [isLoadingGrade, setIsLoadingGrade] = useState(false);
+  const [gradeError, setGradeError] = useState(null);
+  const [loadingCriteriaId, setLoadingCriteriaId] = useState(null); // Track which criteria is being processed
+  
+  // Criteria list from API (uploaded by admin)
+  const [criteriaList, setCriteriaList] = useState([]);
+  const [isLoadingCriteria, setIsLoadingCriteria] = useState(false);
+  const [criteriaError, setCriteriaError] = useState(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [documentContent, setDocumentContent] = useState('');
   const [isLoadingDocument, setIsLoadingDocument] = useState(false);
   const [compareDocumentContent, setCompareDocumentContent] = useState('');
   const [isLoadingCompareDocument, setIsLoadingCompareDocument] = useState(false);
   const [similarityScore, setSimilarityScore] = useState(null);
-  
-  // Criteria API states
-  const [criteriaList, setCriteriaList] = useState([]);
-  const [isLoadingCriteria, setIsLoadingCriteria] = useState(false);
-  const [criteriaError, setCriteriaError] = useState(null);
   
   // Violation Report states
   const [violations, setViolations] = useState([]);
@@ -96,7 +101,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     }
   };
 
-  // Fetch criteria from API
+  // Fetch criteria list from API (uploaded by admin for this exam)
   useEffect(() => {
     const fetchCriteria = async () => {
       if (!exam) return;
@@ -106,18 +111,23 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       
       try {
         console.log('Fetching criteria for exam ID:', exam.id);
-        // Fetch all criteria, filter by examId if needed
+        // Fetch criteria uploaded by admin for this exam
         const data = await criteriaService.getAllCriteria({ examId: exam.id });
         console.log('Criteria fetched successfully:', data);
-        setCriteriaList(data || []);
+        
+        // If API returns empty, use fallback from exam.gradingCriteria
+        if (!data || data.length === 0) {
+          console.log('Using fallback criteria from exam.gradingCriteria');
+          setCriteriaList(exam.gradingCriteria || []);
+        } else {
+          setCriteriaList(data);
+        }
       } catch (error) {
         console.error('Error fetching criteria:', error);
-        setCriteriaError(error.message || 'Không thể tải danh sách tiêu chí');
-        // Fallback to hardcoded criteria from exam prop if API fails
-        if (exam.gradingCriteria) {
-          console.log('Using fallback criteria from exam prop');
-          setCriteriaList(exam.gradingCriteria);
-        }
+        // On error, show error message AND use fallback criteria from exam
+        console.log('Error occurred, using fallback criteria');
+        // setCriteriaError('Không thể tải danh sách tiêu chí từ server. Đang hiển thị dữ liệu mẫu.');
+        setCriteriaList(exam.gradingCriteria || []);
       } finally {
         setIsLoadingCriteria(false);
       }
@@ -232,25 +242,103 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     setScores({});
     setNotes({});
     setAddedCriteria({}); // Reset added criteria when switching students
+    setGradeIds({}); // Reset grade IDs when switching students
   };
 
-  const handleAddCriteria = (criteriaId) => {
+  const handleAddCriteria = async (criteriaId) => {
     const score = scores[criteriaId];
     if (score === undefined || score === '') {
       alert('Vui lòng nhập điểm số trước khi Add!');
       return;
     }
-    setAddedCriteria({ ...addedCriteria, [criteriaId]: true });
+    
+    if (!selectedStudent) {
+      alert('Vui lòng chọn sinh viên trước!');
+      return;
+    }
+
+    setLoadingCriteriaId(criteriaId);
+    setGradeError(null);
+
+    try {
+      // Use submissionId from student object, fallback to student.id if not available
+      const submissionId = selectedStudent.submissionId || selectedStudent.id;
+      
+      // Call API to create grade
+      const gradeData = {
+        submissionId: submissionId,
+        criteriaId: criteriaId,
+        score: parseFloat(score),
+        note: notes[criteriaId] || ''
+      };
+      
+      const response = await gradeService.createGrade(gradeData);
+      
+      // Store the grade ID for future updates
+      setGradeIds({ ...gradeIds, [criteriaId]: response.gradeId });
+      setAddedCriteria({ ...addedCriteria, [criteriaId]: true });
+      
+      console.log('Grade created successfully:', response);
+    } catch (error) {
+      console.error('Error creating grade:', error);
+      setGradeError(`Không thể lưu điểm cho tiêu chí này. Vui lòng thử lại.`);
+      alert('Không thể lưu điểm. Vui lòng thử lại!');
+    } finally {
+      setLoadingCriteriaId(null);
+    }
   };
 
   const handleEditCriteria = (criteriaId) => {
+    // Unlock the fields for editing by removing from addedCriteria
     const updatedAdded = { ...addedCriteria };
     delete updatedAdded[criteriaId];
     setAddedCriteria(updatedAdded);
   };
 
+  const handleUpdateCriteria = async (criteriaId) => {
+    const gradeId = gradeIds[criteriaId];
+    
+    if (!gradeId) {
+      alert('Không tìm thấy ID điểm số. Vui lòng thử Add lại.');
+      return;
+    }
+
+    const score = scores[criteriaId];
+    if (score === undefined || score === '') {
+      alert('Vui lòng nhập điểm số trước khi cập nhật!');
+      return;
+    }
+
+    setLoadingCriteriaId(criteriaId);
+    setGradeError(null);
+
+    try {
+      // Call API to update grade
+      const gradeData = {
+        score: parseFloat(score),
+        note: notes[criteriaId] || ''
+      };
+      
+      await gradeService.updateGrade(gradeId, gradeData);
+      
+      // Mark as added again after successful update
+      setAddedCriteria({ ...addedCriteria, [criteriaId]: true });
+      
+      console.log('Grade updated successfully');
+      alert('Cập nhật điểm thành công!');
+    } catch (error) {
+      console.error('Error updating grade:', error);
+      setGradeError(`Không thể cập nhật điểm cho tiêu chí này. Vui lòng thử lại.`);
+      alert('Không thể cập nhật điểm. Vui lòng thử lại!');
+    } finally {
+      setLoadingCriteriaId(null);
+    }
+  };
+
   const handleScoreChange = (criteriaId, value) => {
-    const criteria = exam.gradingCriteria.find(c => c.id === criteriaId);
+    const criteria = activeCriteria.find(c => c.id === criteriaId);
+    if (!criteria) return;
+    
     const numValue = parseFloat(value);
     
     if (numValue <= criteria.maxScore && numValue >= 0) {
@@ -348,8 +436,49 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     return violations.reduce((sum, v) => sum + v.penalty, 0);
   };
 
+  const handleAddViolationList = async () => {
+    if (violations.length === 0) {
+      alert('Chưa có vi phạm nào để thêm!');
+      return;
+    }
+    
+    if (!selectedStudent) {
+      alert('Vui lòng chọn sinh viên trước!');
+      return;
+    }
+
+    const submissionId = selectedStudent.submissionId || selectedStudent.id;
+    const totalPenalty = getTotalPenalty();
+    
+    // TODO: Call API to add all violations to database
+    // Example API call structure:
+    // const violationData = {
+    //   submissionId: submissionId,
+    //   violations: violations.map(v => ({
+    //     type: v.type,
+    //     description: v.description,
+    //     severity: v.severity,
+    //     penalty: v.penalty
+    //   }))
+    // };
+    // await violationService.addViolationList(violationData);
+    
+    console.log('Ready to add violations for submissionId:', submissionId);
+    console.log('Violations to add:', violations);
+    console.log('Total penalty:', totalPenalty.toFixed(1));
+    
+    alert(`Sẽ thêm ${violations.length} vi phạm với tổng điểm trừ: ${totalPenalty.toFixed(1)} điểm (Chờ API)`);
+  };
+
   const calculateTotalScore = () => {
-    const baseScore = Object.values(scores).reduce((sum, score) => sum + (score || 0), 0);
+    // Only calculate score for criteria that have been added
+    let baseScore = 0;
+    activeCriteria.forEach(criteria => {
+      if (addedCriteria[criteria.id] && scores[criteria.id] !== undefined) {
+        baseScore += scores[criteria.id];
+      }
+    });
+    
     const penalty = getTotalPenalty();
     return Math.max(0, baseScore - penalty);
   };
@@ -360,9 +489,6 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       return;
     }
 
-    // Use criteriaList from API instead of hardcoded data
-    const activeCriteria = criteriaList.length > 0 ? criteriaList : (exam.gradingCriteria || []);
-    
     // Check if all criteria are scored
     const allScored = activeCriteria.every(c => scores[c.id] !== undefined);
     if (!allScored) {
@@ -429,7 +555,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     }
   };
 
-  // Use criteriaList from API, fallback to exam.gradingCriteria
+  // Use criteria from API (uploaded by admin), fallback to exam.gradingCriteria for backward compatibility
   const activeCriteria = criteriaList.length > 0 ? criteriaList : (exam.gradingCriteria || []);
   const totalMaxScore = activeCriteria.reduce((sum, c) => sum + (c.maxScore || 0), 0);
 
@@ -627,27 +753,32 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   </div>
                 </div>
 
-                {/* Loading state */}
-                {isLoadingCriteria && (
-                  <div className="criteria-loading">
+                {gradeError && (
+                  <div className="error-message" style={{margin: '16px 20px'}}>
+                    <AlertCircle size={18} />
+                    {gradeError}
+                  </div>
+                )}
+
+                {isLoadingCriteria ? (
+                  <div className="criteria-loading" style={{padding: '40px 20px', textAlign: 'center', color: '#718096'}}>
                     <div className="loading-spinner"></div>
-                    <p>Đang tải tiêu chí chấm điểm...</p>
+                    <p style={{marginTop: '16px'}}>Đang tải danh sách tiêu chí...</p>
                   </div>
-                )}
-
-                {/* Error state */}
-                {criteriaError && !isLoadingCriteria && (
-                  <div className="criteria-error">
-                    <AlertCircle size={24} />
+                ) : criteriaError ? (
+                  <div className="criteria-error" style={{padding: '40px 20px', textAlign: 'center', color: '#e53e3e'}}>
+                    <AlertCircle size={32} style={{marginBottom: '12px'}} />
                     <p>{criteriaError}</p>
-                    {exam.gradingCriteria && exam.gradingCriteria.length > 0 && (
-                      <p className="fallback-note">Đang sử dụng dữ liệu dự phòng</p>
-                    )}
                   </div>
-                )}
-
+                ) : activeCriteria.length === 0 ? (
+                  <div className="criteria-loading" style={{padding: '40px 20px', textAlign: 'center', color: '#718096'}}>
+                    <AlertCircle size={32} style={{marginBottom: '12px'}} />
+                    <p>Chưa có tiêu chí chấm điểm cho kỳ thi này</p>
+                    <p style={{fontSize: '14px', marginTop: '8px'}}>Admin cần upload file tiêu chí trước</p>
+                  </div>
+                ) : (
                 <div className="criteria-list">
-                  {!isLoadingCriteria && (criteriaList.length > 0 ? criteriaList : exam.gradingCriteria || []).map((criteria) => (
+                  {activeCriteria.map((criteria) => (
                     <div key={criteria.id} className="criteria-item">
                       <div className="criteria-header">
                         <div className="criteria-title-group">
@@ -661,15 +792,25 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                           <button 
                             className="btn-criteria-action btn-edit"
                             onClick={() => handleEditCriteria(criteria.id)}
+                            disabled={loadingCriteriaId === criteria.id}
                           >
                             Edit
+                          </button>
+                        ) : gradeIds[criteria.id] ? (
+                          <button 
+                            className="btn-criteria-action btn-update"
+                            onClick={() => handleUpdateCriteria(criteria.id)}
+                            disabled={loadingCriteriaId === criteria.id}
+                          >
+                            {loadingCriteriaId === criteria.id ? 'Loading...' : 'Update'}
                           </button>
                         ) : (
                           <button 
                             className="btn-criteria-action btn-add"
                             onClick={() => handleAddCriteria(criteria.id)}
+                            disabled={loadingCriteriaId === criteria.id}
                           >
-                            Add
+                            {loadingCriteriaId === criteria.id ? 'Loading...' : 'Add'}
                           </button>
                         )}
                       </div>
@@ -706,10 +847,12 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                     </div>
                   ))}
                 </div>
+                )}
 
                 <button
                   onClick={handleSubmitGrade}
                   className="btn btn-success btn-submit"
+                  disabled={loadingCriteriaId !== null}
                 >
                   <Save size={20} />
                   Lưu điểm
@@ -791,9 +934,15 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                         </div>
                       </div>
                     ))}
-                    <div className="total-penalty">
-                      <span>Tổng điểm bị trừ:</span>
-                      <span className="penalty-value">-{getTotalPenalty().toFixed(1)} điểm</span>
+                    <div className="violation-total-action">
+                      <button 
+                        onClick={handleAddViolationList}
+                        className="btn btn-warning"
+                        style={{width: 'max-content', marginTop: '16px'}}
+                      >
+                        <Save size={18} />
+                        Lưu vi phạm ({violations.length} vi phạm, -{getTotalPenalty().toFixed(1)} điểm)
+                      </button>
                     </div>
                   </div>
                 ) : (

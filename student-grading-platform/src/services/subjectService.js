@@ -4,7 +4,7 @@ const subjectService = {
   // Get all subjects
   getAllSubjects: async () => {
     try {
-      const response = await axiosInstance.get('/subjects');
+      const response = await axiosInstance.get('/api/v1/subjects');
       // Map API response to UI format
       return response.map(subject => ({
         id: subject.subjectId,
@@ -20,7 +20,7 @@ const subjectService = {
   // Get subject by ID
   getSubjectById: async (id) => {
     try {
-      const response = await axiosInstance.get(`/subjects/${id}`);
+      const response = await axiosInstance.get(`/api/v1/subjects/${id}`);
       return {
         id: response.subjectId,
         code: response.subjectCode,
@@ -40,7 +40,7 @@ const subjectService = {
         subjectCode: subjectData.code,
         subjectName: subjectData.name
       };
-      const response = await axiosInstance.post('/subjects', apiData);
+      const response = await axiosInstance.post('/api/v1/subjects', apiData);
       // Map response back to UI format
       return {
         id: response.subjectId,
@@ -61,7 +61,7 @@ const subjectService = {
         subjectCode: subjectData.code,
         subjectName: subjectData.name
       };
-      const response = await axiosInstance.put(`/subjects/${id}`, apiData);
+      const response = await axiosInstance.put(`/api/v1/subjects/${id}`, apiData);
       // Map response back to UI format
       return {
         id: response.subjectId,
@@ -77,7 +77,7 @@ const subjectService = {
   // Delete subject
   deleteSubject: async (id) => {
     try {
-      await axiosInstance.delete(`/subjects/${id}`);
+      await axiosInstance.delete(`/api/v1/subjects/${id}`);
       return true;
     } catch (error) {
       console.error('Error deleting subject:', error);

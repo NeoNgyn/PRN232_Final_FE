@@ -1,74 +1,59 @@
 /**
  * Axios Configuration
  * 
- * Centralized axios instance with interceptors for:
+ * Multiple axios instances for microservices architecture:
+ * - identityAxios: Authentication service (Port 5001)
+ * - academicAxios: Academic data service (Port 5003)
+ * 
+ * Each instance has interceptors for:
  * - Authentication headers
  * - Request/Response logging
  * - Error handling
- * - Token refresh logic (if needed)
  */
 
 import axios from 'axios';
-import API_BASE_URL from './api';
+import { IDENTITY_SERVICE_URL, ACADEMIC_SERVICE_URL } from './api';
 
-// Create axios instance
-const axiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
+// Create request interceptor function (reusable)
+const createRequestInterceptor = (serviceName) => (config) => {
+  const token = localStorage.getItem('accessToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-});
-
-// Request interceptor - Add auth token to all requests
-axiosInstance.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // Log request in development
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.params || config.data);
-    }
-    
-    return config;
-  },
-  (error) => {
-    console.error('[API Request Error]', error);
-    return Promise.reject(error);
+  
+  // Log request in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[${serviceName} Request] ${config.method?.toUpperCase()} ${config.url}`, config.params || config.data);
   }
-);
+  
+  return config;
+};
 
-// Response interceptor - Handle responses and errors
-axiosInstance.interceptors.response.use(
-  (response) => {
+// Create response interceptor function (reusable)
+const createResponseInterceptor = (serviceName) => ({
+  onFulfilled: (response) => {
     // Log response in development
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[API Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
+      console.log(`[${serviceName} Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
     }
     
     // Extract data from ApiResponse wrapper
     // Backend returns: { data: T, statusCode: number, message: string }
     return response.data.data !== undefined ? response.data.data : response.data;
   },
-  (error) => {
+  onRejected: (error) => {
     // Log error in development
     if (process.env.NODE_ENV === 'development') {
-      console.error('[API Response Error]', error.response?.data || error.message);
+      console.error(`[${serviceName} Error]`, error.response?.data || error.message);
     }
 
     // Handle specific error cases
     if (error.response) {
-      // Server responded with error status
       const { status, data } = error.response;
       
       switch (status) {
         case 401:
-          // Unauthorized - token expired or invalid
           console.error('Authentication error - please login again');
-          // TODO: Implement token refresh or redirect to login
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           window.location.href = '/';
@@ -88,15 +73,65 @@ axiosInstance.interceptors.response.use(
       
       return Promise.reject(new Error(data?.message || error.message));
     } else if (error.request) {
-      // Request was made but no response received
       console.error('No response from server');
       return Promise.reject(new Error('Không thể kết nối đến server. Vui lòng kiểm tra kết nối mạng.'));
     } else {
-      // Something else happened
       console.error('Request setup error:', error.message);
       return Promise.reject(error);
     }
   }
+});
+
+// IdentityService axios instance (Port 5001)
+const identityAxios = axios.create({
+  baseURL: IDENTITY_SERVICE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
+// AcademicService axios instance (Port 5003)
+const academicAxios = axios.create({
+  baseURL: ACADEMIC_SERVICE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
+// Add interceptors to IdentityService instance
+identityAxios.interceptors.request.use(
+  createRequestInterceptor('IdentityService'),
+  (error) => {
+    console.error('[IdentityService Request Error]', error);
+    return Promise.reject(error);
+  }
 );
 
-export default axiosInstance;
+const identityResponseInterceptor = createResponseInterceptor('IdentityService');
+identityAxios.interceptors.response.use(
+  identityResponseInterceptor.onFulfilled,
+  identityResponseInterceptor.onRejected
+);
+
+// Add interceptors to AcademicService instance
+academicAxios.interceptors.request.use(
+  createRequestInterceptor('AcademicService'),
+  (error) => {
+    console.error('[AcademicService Request Error]', error);
+    return Promise.reject(error);
+  }
+);
+
+const academicResponseInterceptor = createResponseInterceptor('AcademicService');
+academicAxios.interceptors.response.use(
+  academicResponseInterceptor.onFulfilled,
+  academicResponseInterceptor.onRejected
+);
+
+// Export both instances
+export { identityAxios, academicAxios };
+
+// Default export for backward compatibility (use AcademicService as default since most features use it)
+export default academicAxios;
