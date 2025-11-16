@@ -13,7 +13,7 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
   const [showSemesterModal, setShowSemesterModal] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
   const [showCriteriaModal, setShowCriteriaModal] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showStudentImportModal, setShowStudentImportModal] = useState(false);
   const [selectedExam, setSelectedExam] = useState(null);
   const [newSubject, setNewSubject] = useState({ code: '', name: '' });
   const [newSemester, setNewSemester] = useState({ code: '', name: '' });
@@ -24,8 +24,6 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
     slot: '',
     teacherId: '' 
   });
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
   const [isUploadingCriteria, setIsUploadingCriteria] = useState(false);
   const [criteriaError, setCriteriaError] = useState(null);
   const [isUploadingStudents, setIsUploadingStudents] = useState(false);
@@ -331,8 +329,8 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
     return null;
   };
 
-  // Handle JSON student import
-  const handleUploadStudentFiles = async (e) => {
+  // Handle global student import
+  const handleImportStudents = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -352,30 +350,13 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
 
       console.log('Import students API response:', response);
 
-      // Map API response to UI format
-      const importedStudents = response.students.map((s, index) => ({
-        id: s.studentId || index + 1,
-        studentId: s.studentId,
-        studentName: s.fullName,
-        createdAt: s.createdAt || new Date().toISOString()
-      }));
-
-      // Update exam with imported students (or update global students list)
-      if (selectedExam) {
-        setExams(exams.map(exam => 
-          exam.id === selectedExam.id 
-            ? { ...exam, students: importedStudents }
-            : exam
-        ));
-      }
-
       // Success alert
-      const studentList = importedStudents.slice(0, 5).map(s => `  • ${s.studentName} (${s.studentId})`).join('\n');
+      const importedStudents = response.students || [];
+      const studentList = importedStudents.slice(0, 5).map(s => `  • ${s.fullName} (${s.studentId})`).join('\n');
       const moreText = importedStudents.length > 5 ? `\n  ... và ${importedStudents.length - 5} sinh viên khác` : '';
-      alert(`✓ Đã import thành công ${response.importedCount} sinh viên!\n\nMột số sinh viên:\n${studentList}${moreText}`);
+      alert(`✓ Đã import thành công ${response.importedCount} sinh viên vào hệ thống!\n\nMột số sinh viên:\n${studentList}${moreText}`);
       
-      setShowUploadModal(false);
-      setSelectedExam(null);
+      setShowStudentImportModal(false);
     } catch (error) {
       console.error('Error importing students:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Không thể import sinh viên';
@@ -481,8 +462,18 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
 
       <div className="dashboard-content">
         <div className="content-header">
-          <h1>Quản lý Hệ thống Chấm Bài</h1>
-          <p>Quản lý môn học, kỳ thi và phân công giáo viên</p>
+          <div>
+            <h1>Quản lý Hệ thống Chấm Bài</h1>
+            <p>Quản lý môn học, kỳ thi và phân công giáo viên</p>
+          </div>
+          <button 
+            onClick={() => setShowStudentImportModal(true)}
+            className="btn btn-primary"
+            style={{ alignSelf: 'flex-start' }}
+          >
+            <Users size={18} />
+            Import Student List
+          </button>
         </div>
 
         {/* Statistics */}
@@ -742,20 +733,6 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
                           >
                             <Upload size={16} />
                             Tiêu chí
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedExam({
-                                ...exam,
-                                subject: subjects.find(s => s.id === exam.subjectId)
-                              });
-                              setShowUploadModal(true);
-                            }}
-                            className="btn btn-primary btn-sm"
-                            disabled={isLoadingExams}
-                          >
-                            <Archive size={16} />
-                            Upload bài
                           </button>
                         </div>
                       </td>
@@ -1069,20 +1046,20 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
         </div>
       )}
 
-      {/* Upload Student Files Modal */}
-      {showUploadModal && selectedExam && (
-        <div className="modal-overlay" onClick={() => !isUploadingStudents && setShowUploadModal(false)}>
+      {/* Import Student List Modal */}
+      {showStudentImportModal && (
+        <div className="modal-overlay" onClick={() => !isUploadingStudents && setShowStudentImportModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Import Danh sách Sinh viên</h2>
+              <h2>Import Student List</h2>
               {!isUploadingStudents && (
-                <button className="close-btn" onClick={() => setShowUploadModal(false)}>
+                <button className="close-btn" onClick={() => setShowStudentImportModal(false)}>
                   ×
                 </button>
               )}
             </div>
             <div className="import-section">
-              <p>Kỳ thi: <strong>{getSubjectName(selectedExam.subjectId)} - {getSemesterName(selectedExam.semesterId)}</strong></p>
+              <p style={{ marginBottom: '20px', color: '#666' }}>Import danh sách sinh viên vào hệ thống</p>
               
               {isUploadingStudents ? (
                 <div className="upload-progress">
@@ -1097,21 +1074,21 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
                     <p>File JSON chứa danh sách sinh viên</p>
                     <div className="file-format">
                       <p><strong>Format JSON:</strong></p>
-                      <pre style={{ textAlign: 'left', fontSize: '12px', background: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>[
-  {{
+                      <pre style={{ textAlign: 'left', fontSize: '12px', background: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>{`[
+  {
     "studentId": "SE161572",
     "fullName": "Nguyen Van A"
-  }},
-  {{
+  },
+  {
     "studentId": "SE161573",
     "fullName": "Tran Thi B"
-  }}
-]</pre>
+  }
+]`}</pre>
                     </div>
                     <input
                       type="file"
                       accept=".json"
-                      onChange={handleUploadStudentFiles}
+                      onChange={handleImportStudents}
                       className="file-input"
                       disabled={isUploadingStudents}
                     />
@@ -1124,20 +1101,6 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
                     </div>
                   )}
                 </>
-              )}
-              
-              {selectedExam.students && selectedExam.students.length > 0 && (
-                <div className="criteria-preview">
-                  <h4>Sinh viên đã import ({selectedExam.students.length}):</h4>
-                  <ul style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                    {selectedExam.students.map(student => (
-                      <li key={student.id}>
-                        <Users size={16} />
-                        <strong>{student.studentName}</strong> ({student.studentId})
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               )}
             </div>
           </div>

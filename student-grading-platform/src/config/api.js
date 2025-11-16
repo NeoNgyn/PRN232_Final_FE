@@ -51,6 +51,13 @@ export const API_ENDPOINTS = {
     UPDATE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/submissions/${id}`,
     DELETE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/submissions/${id}`
   },
+  VIOLATIONS: {
+    GET_ALL: `${ACADEMIC_SERVICE_URL}/api/v1/violation`,
+    GET_BY_ID: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/violation/${id}`,
+    CREATE: `${ACADEMIC_SERVICE_URL}/api/v1/violation`,
+    UPDATE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/violation/${id}/update`,
+    DELETE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/violation/${id}/delete`
+  },
   FILES: {
     IMPORT_STUDENTS: `${ACADEMIC_SERVICE_URL}/api/v1/files/import-student`,
     IMPORT_CRITERIA: `${ACADEMIC_SERVICE_URL}/api/v1/files/import-criteria`,

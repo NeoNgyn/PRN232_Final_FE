@@ -4,7 +4,7 @@ const gradeService = {
   // Get all grades
   getAllGrades: async () => {
     try {
-      const response = await axiosInstance.get('/grades');
+      const response = await axiosInstance.get('/api/v1/grade');
       return response;
     } catch (error) {
       console.error('Error fetching grades:', error);
@@ -15,7 +15,7 @@ const gradeService = {
   // Get grade by ID
   getGradeById: async (id) => {
     try {
-      const response = await axiosInstance.get(`/grades/${id}`);
+      const response = await axiosInstance.get(`/api/v1/grade/${id}`);
       return response;
     } catch (error) {
       console.error('Error fetching grade:', error);
@@ -26,14 +26,16 @@ const gradeService = {
   // Create new grade
   createGrade: async (gradeData) => {
     try {
-      // API expects: SubmissionId, CriteriaId, Score, Note
+      // API expects: SubmissionId, CriteriaId, Score, Note (PascalCase)
       const apiData = {
-        submissionId: gradeData.submissionId,
-        criteriaId: gradeData.criteriaId,
-        score: gradeData.score,
-        note: gradeData.note || null
+        SubmissionId: gradeData.submissionId,
+        CriteriaId: gradeData.criteriaId,
+        Score: gradeData.score,
+        Note: gradeData.note || null
       };
-      const response = await axiosInstance.post('/grades', apiData);
+      console.log('Creating grade with data:', apiData);
+      const response = await axiosInstance.post('/api/v1/grade', apiData);
+      console.log('Grade created successfully:', response);
       return response;
     } catch (error) {
       console.error('Error creating grade:', error);
@@ -53,11 +55,13 @@ const gradeService = {
         formData.append('Note', gradeData.note);
       }
       
-      const response = await axiosInstance.put(`/grades/${id}`, formData, {
+      console.log('Updating grade ID:', id);
+      const response = await axiosInstance.put(`/api/v1/grade/${id}/update`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
+      console.log('Grade updated successfully:', response);
       return response;
     } catch (error) {
       console.error('Error updating grade:', error);
@@ -68,7 +72,9 @@ const gradeService = {
   // Delete grade
   deleteGrade: async (id) => {
     try {
-      const response = await axiosInstance.patch(`/grades/${id}`);
+      console.log('Deleting grade ID:', id);
+      const response = await axiosInstance.delete(`/api/v1/grade/${id}/delete`);
+      console.log('Grade deleted successfully');
       return response;
     } catch (error) {
       console.error('Error deleting grade:', error);
