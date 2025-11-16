@@ -132,7 +132,7 @@ function TeacherDashboard({ user, onLogout }) {
           <div className="nav-content">
             <div className="nav-brand">
               <BookOpen size={28} />
-              <span>Teacher Dashboard</span>
+              <span>Lecturer Dashboard</span>
             </div>
             <div className="nav-user">
               <span>Xin chào, {user.name}</span>
@@ -161,7 +161,7 @@ function TeacherDashboard({ user, onLogout }) {
           <div className="nav-content">
             <div className="nav-brand">
               <BookOpen size={28} />
-              <span>Teacher Dashboard</span>
+              <span>Lecturer Dashboard</span>
             </div>
             <div className="nav-user">
               <span>Xin chào, {user.name}</span>
@@ -191,7 +191,7 @@ function TeacherDashboard({ user, onLogout }) {
         <div className="nav-content">
           <div className="nav-brand">
             <BookOpen size={28} />
-            <span>Teacher Dashboard</span>
+            <span>Lecturer Dashboard</span>
           </div>
           <div className="nav-user">
             <span>Xin chào, {user.name}</span>

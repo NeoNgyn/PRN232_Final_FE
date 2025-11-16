@@ -11,6 +11,7 @@ import submissionService from '../services/submissionService';
 import examService from '../services/examService';
 import subjectService from '../services/subjectService';
 import violationService from '../services/violationService';
+import signalRService from '../services/signalRService';
 import './GradingPage.css';
 
 function GradingPage({ user, onLogout, exams, setExams, subjects }) {
@@ -29,6 +30,8 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   const [submissions, setSubmissions] = useState([]);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(true);
   const [submissionsError, setSubmissionsError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState(''); // Search state
+  const [isSearching, setIsSearching] = useState(false);
   
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [submissionDetail, setSubmissionDetail] = useState(null);
@@ -97,22 +100,28 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     fetchExam();
   }, [examId]);
 
-  // Fetch submissions from backend when exam is loaded
+  // Fetch submissions from backend when exam is loaded or search term changes
   useEffect(() => {
     const fetchSubmissions = async () => {
       if (!exam || !user.id) return;
+      
+      console.log('=== Fetching Submissions ===');
+      console.log('exam.id:', exam.id);
+      console.log('user.id:', user.id);
+      console.log('searchTerm:', searchTerm);
       
       setIsLoadingSubmissions(true);
       setSubmissionsError(null);
       
       try {
-        const fetchedSubmissions = await submissionService.getSubmissionsByExamAndExaminer(exam.id, user.id);
+        // Use querySubmissions for search functionality
+        const fetchedSubmissions = await submissionService.querySubmissions(exam.id, user.id, searchTerm);
         
         // Map submissions to student format for UI compatibility
         const studentsFromSubmissions = fetchedSubmissions.map(sub => ({
           id: sub.id,
           studentId: sub.studentId,
-          studentName: sub.studentId, // Will be updated from backend later if needed
+          studentName: sub.student?.fullName || sub.studentId, // Get full name from student object
           fileName: sub.originalFileName,
           fileUrl: sub.filePath,
           uploadedAt: sub.uploadedAt,
@@ -121,20 +130,171 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
           graded: sub.gradingStatus === 'Passed' || sub.gradingStatus === 'Failed',
           grades: sub.grades || [],
           violations: sub.violations || [],
+          student: sub.student, // Keep full student object for reference
+          exam: sub.exam, // Keep full exam object for reference
           _submission: sub
         }));
         
         setSubmissions(studentsFromSubmissions);
       } catch (error) {
         console.error('Error fetching submissions:', error);
-        setSubmissionsError('Kh\u00f4ng th\u1ec3 t\u1ea3i danh s\u00e1ch b\u00e0i n\u1ed9p.');
+        setSubmissionsError('Kh\u00f4ng th\u1ec3 t\u1ea3i danh s\u00e1ch b\u00e0i n\u1ed9p. Vui l\u00f2ng th\u1eed l\u1ea1i.');
       } finally {
         setIsLoadingSubmissions(false);
       }
     };
     
-    fetchSubmissions();
-  }, [exam, user.id]);
+    // Debounce search to avoid too many API calls
+    const timeoutId = setTimeout(() => {
+      fetchSubmissions();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [exam, user.id, searchTerm]);
+
+  // SignalR connection and real-time updates
+  useEffect(() => {
+    const setupSignalR = async () => {
+      console.log('🔌 Setting up SignalR connection...');
+      console.log('Current exam:', exam?.id);
+      console.log('Current user:', user?.id);
+      
+      // Start SignalR connection
+      const connected = await signalRService.startConnection();
+      
+      if (connected) {
+        console.log('✅ SignalR connected - listening for submission updates');
+        console.log('Connection state:', signalRService.getConnectionState());
+        
+        // Subscribe to SubmissionCreated event
+        signalRService.onSubmissionCreated((newSubmission) => {
+          console.log('🔥 [SignalR] SubmissionCreated event received:');
+          console.log('  - SubmissionId:', newSubmission.SubmissionId);
+          console.log('  - ExamId:', newSubmission.ExamId);
+          console.log('  - ExaminerId:', newSubmission.ExaminerId);
+          console.log('  - StudentId:', newSubmission.StudentId);
+          console.log('  - Current exam.id:', exam?.id);
+          console.log('  - Current user.id:', user?.id);
+          console.log('  - Full data:', newSubmission);
+          
+          // Check if this submission belongs to current exam and examiner
+          if (newSubmission.ExamId === exam?.id && newSubmission.ExaminerId === user?.id) {
+            console.log('✅ Submission matches current exam and examiner!');
+            // Map backend response to UI format
+            const mappedSubmission = {
+              id: newSubmission.SubmissionId,
+              examId: newSubmission.ExamId,
+              studentId: newSubmission.StudentId,
+              studentName: newSubmission.Student?.FullName || newSubmission.StudentId,
+              fileName: newSubmission.OriginalFileName,
+              fileUrl: newSubmission.FilePath,
+              uploadedAt: newSubmission.UploadedAt,
+              totalScore: newSubmission.TotalScore || 0,
+              gradingStatus: newSubmission.GradingStatus || 'Pending',
+              graded: false,
+              grades: [],
+              violations: [],
+              student: newSubmission.Student ? {
+                studentId: newSubmission.Student.StudentId,
+                fullName: newSubmission.Student.FullName
+              } : null,
+              exam: newSubmission.Exam,
+              _submission: newSubmission
+            };
+            
+            // Add to submissions list if not already exists
+            setSubmissions(prev => {
+              const exists = prev.some(s => s.id === mappedSubmission.id);
+              if (!exists) {
+                console.log('➕ Adding new submission to list');
+                return [mappedSubmission, ...prev];
+              }
+              console.log('⚠️ Submission already exists in list');
+              return prev;
+            });
+          } else {
+            console.log('❌ Submission does not match current exam/examiner - ignoring');
+          }
+        });
+        
+        // Subscribe to SubmissionUpdated event
+        signalRService.onSubmissionUpdated((updatedSubmission) => {
+          console.log('🔥 [SignalR] SubmissionUpdated event received:');
+          
+          // Support both PascalCase and camelCase from backend
+          const submissionId = updatedSubmission.SubmissionId || updatedSubmission.submissionId;
+          const examId = updatedSubmission.ExamId || updatedSubmission.examId;
+          const examinerId = updatedSubmission.ExaminerId || updatedSubmission.examinerId;
+          const totalScore = updatedSubmission.TotalScore ?? updatedSubmission.totalScore;
+          const gradingStatus = updatedSubmission.GradingStatus || updatedSubmission.gradingStatus;
+          
+          console.log('  - SubmissionId:', submissionId);
+          console.log('  - ExamId:', examId);
+          console.log('  - ExaminerId:', examinerId);
+          console.log('  - TotalScore:', totalScore);
+          console.log('  - GradingStatus:', gradingStatus);
+          console.log('  - Current exam.id:', exam?.id);
+          console.log('  - Current user.id:', user?.id);
+          console.log('  - Full data:', updatedSubmission);
+          
+          // Check if this submission belongs to current exam and examiner
+          if (examId === exam?.id && examinerId === user?.id) {
+            console.log('✅ Submission matches current exam and examiner!');
+            // Update submission in list
+            setSubmissions(prev => {
+              console.log('Current submissions count:', prev.length);
+              const updated = prev.map(s => {
+                if (s.id === submissionId) {
+                  console.log('🔄 Found and updating submission in list');
+                  console.log('  - Old score:', s.totalScore);
+                  console.log('  - New score:', totalScore);
+                  console.log('  - Old status:', s.gradingStatus);
+                  console.log('  - New status:', gradingStatus);
+                  return {
+                    ...s,
+                    totalScore: totalScore ?? 0,
+                    gradingStatus: gradingStatus || 'Pending',
+                    graded: gradingStatus === 'Passed' || gradingStatus === 'Failed',
+                    _submission: updatedSubmission
+                  };
+                }
+                return s;
+              });
+              console.log('Updated submissions:', updated);
+              return updated;
+            });
+            
+            // If this is the currently selected submission, refresh detail
+            if (selectedStudent?.id === submissionId) {
+              console.log('🔄 Currently viewing this submission - refreshing detail');
+              loadSubmissionDetail({ id: submissionId });
+            } else {
+              console.log('📌 Not currently viewing this submission (selectedStudent.id:', selectedStudent?.id, ')');
+            }
+          } else {
+            console.log('❌ Submission does not match current exam/examiner - ignoring');
+          }
+        });
+        
+        console.log('✅ SignalR event handlers registered successfully');
+      } else {
+        console.error('❌ Failed to connect to SignalR');
+      }
+    };
+    
+    if (exam && user) {
+      setupSignalR();
+    } else {
+      console.log('⚠️ Waiting for exam and user data...');
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      console.log('🧹 Cleaning up SignalR event handlers');
+      signalRService.offSubmissionCreated();
+      signalRService.offSubmissionUpdated();
+    };
+  }, [exam, user]);
 
   // Auto-select submission when submissionId is in URL
   useEffect(() => {
@@ -1028,6 +1188,65 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
               </div>
             </div>
             
+            {/* Search Box */}
+            <div className="search-box-container" style={{ 
+              padding: '16px 20px', 
+              background: '#f7fafc', 
+              borderBottom: '1px solid #e2e8f0',
+              marginBottom: '16px'
+            }}>
+              <div style={{ position: 'relative', maxWidth: '500px' }}>
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm theo tên hoặc MSSV sinh viên..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="search-input"
+                  style={{
+                    width: '100%',
+                    padding: '10px 40px 10px 12px',
+                    border: '1px solid #cbd5e0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'all 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#4299e1'}
+                  onBlur={(e) => e.target.style.borderColor = '#cbd5e0'}
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#718096',
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                      fontSize: '18px'
+                    }}
+                    title="Xóa tìm kiếm"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              {searchTerm && (
+                <p style={{ 
+                  marginTop: '8px', 
+                  fontSize: '13px', 
+                  color: '#718096',
+                  fontStyle: 'italic'
+                }}>
+                  {isLoadingSubmissions ? 'Đang tìm kiếm...' : `Tìm thấy ${submissions.length} kết quả`}
+                </p>
+              )}
+            </div>
+            
             {isLoadingSubmissions ? (
               <div style={{ padding: '40px', textAlign: 'center' }}>
                 <div className="loading-spinner"></div>
@@ -1040,10 +1259,13 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
               </div>
             ) : submissions.length > 0 ? (
               <div className="student-grid">
-                {submissions.map((student) => (
+                {submissions.map((student) => {
+                  const isFailed = student.graded && student.gradingStatus === 'Failed';
+                  const isPassed = student.graded && student.gradingStatus === 'Passed';
+                  return (
                   <div 
                     key={student.id} 
-                    className={`student-card ${student.graded ? 'graded' : ''}`}
+                    className={`student-card ${isPassed ? 'graded' : ''} ${isFailed ? 'failed' : ''}`}
                     onClick={() => handleSelectStudent(student)}
                   >
                     <div className="student-card-header">
@@ -1068,7 +1290,8 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="empty-state">

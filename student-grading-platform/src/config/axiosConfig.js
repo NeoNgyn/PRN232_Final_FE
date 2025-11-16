@@ -37,9 +37,23 @@ const createResponseInterceptor = (serviceName) => ({
       console.log(`[${serviceName} Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
     }
     
-    // Extract data from ApiResponse wrapper
-    // Backend returns: { data: T, statusCode: number, message: string }
-    return response.data.data !== undefined ? response.data.data : response.data;
+    // Extract data from different response formats:
+    // 1. ApiResponse wrapper: { data: T, statusCode: number, message: string }
+    // 2. OData response: { "@odata.context": "...", "value": [...] } or { "value": [...] }
+    // 3. Direct data: [...] or { ... }
+    
+    // Check if it's an OData response (has 'value' property or '@odata.context')
+    if (response.data && (response.data.value !== undefined || response.data['@odata.context'])) {
+      return response.data; // Return full OData response to let service handle it
+    }
+    
+    // Check if it's ApiResponse wrapper
+    if (response.data && response.data.data !== undefined) {
+      return response.data.data;
+    }
+    
+    // Return data as-is
+    return response.data;
   },
   onRejected: (error) => {
     // Log error in development
