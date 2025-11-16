@@ -1,12 +1,14 @@
-import axiosInstance from '../config/axiosConfig';
+import { academicAxios } from '../config/axiosConfig';
+import { API_ENDPOINTS } from '../config/api';
 
 const examService = {
   // Get all exams
   getAllExams: async () => {
     try {
-      const response = await axiosInstance.get('/api/v1/exams');
+      const response = await academicAxios.get(API_ENDPOINTS.EXAMS.GET_ALL);
+      const exams = response.data?.data || [];
       // Map API response to UI format
-      return response.map(exam => ({
+      return exams.map(exam => ({
         id: exam.examId,
         subjectId: exam.subjectId,
         semesterId: exam.semesterId,
@@ -25,9 +27,11 @@ const examService = {
   // Get exam by ID
   getExamById: async (id) => {
     try {
-      const response = await axiosInstance.get(`/api/v1/exams/${id}`);
+      const response = await academicAxios.get(API_ENDPOINTS.EXAMS.GET_BY_ID(id));
+      const exam = response.data?.data;
+      if (!exam) return null;
       return {
-        id: response.examId,
+        id: exam.examId,
         subjectId: response.subjectId,
         semesterId: response.semesterId,
         examName: response.examName,
@@ -52,10 +56,11 @@ const examService = {
         examType: examData.examType,
         examPassword: examData.examPassword || null
       };
-      const response = await axiosInstance.post('/api/v1/exams', apiData);
+      const response = await academicAxios.post(API_ENDPOINTS.EXAMS.CREATE, apiData);
+      const exam = response.data?.data;
       // Map response back to UI format
       return {
-        id: response.examId,
+        id: exam.examId,
         subjectId: response.subjectId,
         semesterId: response.semesterId,
         examName: response.examName,
@@ -86,10 +91,11 @@ const examService = {
         apiData.examPassword = examData.examPassword;
       }
       
-      const response = await axiosInstance.put(`/api/v1/exams/${id}`, apiData);
+      const response = await academicAxios.put(API_ENDPOINTS.EXAMS.UPDATE(id), apiData);
+      const exam = response.data?.data;
       // Map response back to UI format
       return {
-        id: response.examId,
+        id: exam.examId,
         subjectId: response.subjectId,
         semesterId: response.semesterId,
         examName: response.examName,
@@ -106,7 +112,7 @@ const examService = {
   // Delete exam
   deleteExam: async (id) => {
     try {
-      await axiosInstance.delete(`/api/v1/exams/${id}`);
+      await academicAxios.delete(API_ENDPOINTS.EXAMS.DELETE(id));
       return true;
     } catch (error) {
       console.error('Error deleting exam:', error);

@@ -62,14 +62,16 @@ function Login({ onLogin }) {
         }
 
         // Map backend role to frontend role
-        // Backend returns role from database (e.g., "Admin", "Examiner", "Lecturer", etc.)
-        // Frontend expects: 'admin' for AdminDashboard, 'teacher' for TeacherDashboard
+        // Backend returns role from database (e.g., "Admin", "Manager", "Examiner", "Lecturer", etc.)
+        // Frontend expects: 'admin' for AdminDashboard, 'manager' for ManagerDashboard, 'teacher' for TeacherDashboard
         const backendRole = data.data.role || '';
         let frontendRole = 'teacher'; // Default fallback
         
-        // Map roles: Admin -> admin, Examiner/Lecturer -> teacher
+        // Map roles: Admin -> admin, Manager -> manager, Examiner/Lecturer -> teacher
         if (backendRole.toLowerCase() === 'admin') {
           frontendRole = 'admin';
+        } else if (backendRole.toLowerCase() === 'manager') {
+          frontendRole = 'manager';
         } else if (backendRole.toLowerCase() === 'examiner' || 
                    backendRole.toLowerCase() === 'lecturer' ||
                    backendRole.toLowerCase() === 'teacher') {

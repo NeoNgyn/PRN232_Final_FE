@@ -7,7 +7,8 @@
  * - RAR/ZIP extraction
  */
 
-import axiosInstance from '../config/axiosConfig';
+import { academicAxios } from '../config/axiosConfig';
+import { API_ENDPOINTS } from '../config/api';
 
 // Import criteria from Excel file
 export const importCriteria = async (file, examId) => {
@@ -15,7 +16,7 @@ export const importCriteria = async (file, examId) => {
   formData.append('file', file);
   formData.append('examId', examId);
 
-  const response = await axiosInstance.post('/api/v1/files/import-criteria', formData, {
+  const response = await academicAxios.post(API_ENDPOINTS.FILES.IMPORT_CRITERIA, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
 
@@ -28,7 +29,7 @@ export const importStudents = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await axiosInstance.post('/api/v1/files/import-student', formData, {
+  const response = await academicAxios.post(API_ENDPOINTS.FILES.IMPORT_STUDENTS, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
 
@@ -43,7 +44,7 @@ export const extractRarAndCreateSubmissions = async (rarFile, examId, examinerId
   formData.append('ExamId', examId);
   formData.append('ExaminerId', examinerId);
 
-  const response = await axiosInstance.post('/api/v1/files/extract-rar', formData, {
+  const response = await academicAxios.post(API_ENDPOINTS.FILES.EXTRACT_RAR, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
 
@@ -53,6 +54,6 @@ export const extractRarAndCreateSubmissions = async (rarFile, examId, examinerId
 
 // Get file URL
 export const getFileUrl = async (filePath) => {
-  const response = await axiosInstance.get(`/api/v1/files/${encodeURIComponent(filePath)}`);
-  return response.url;
+  const response = await academicAxios.get(API_ENDPOINTS.FILES.GET_FILE_URL(filePath));
+  return response.data?.url || response.url;
 };

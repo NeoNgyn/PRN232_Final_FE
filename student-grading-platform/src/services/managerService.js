@@ -1,4 +1,4 @@
-import axiosInstance from '../config/axiosConfig';
+import { identityAxios, academicAxios } from '../config/axiosConfig';
 import { API_ENDPOINTS } from '../config/api';
 
 const managerService = {
@@ -7,7 +7,7 @@ const managerService = {
    */
   getAllTeachers: async () => {
     try {
-      const response = await axiosInstance.get(API_ENDPOINTS.USERS.GET_TEACHERS);
+      const response = await identityAxios.get(API_ENDPOINTS.USERS.GET_TEACHERS);
       // Backend returns { success, message, data }
       if (response.data && response.data.data) {
         return response.data.data;
@@ -32,7 +32,7 @@ const managerService = {
       formData.append('ExamId', examId);
       formData.append('ExaminerId', examinerId);
 
-      const response = await axiosInstance.post(
+      const response = await academicAxios.post(
         API_ENDPOINTS.FILES.EXTRACT_RAR,
         formData,
         {
@@ -55,7 +55,7 @@ const managerService = {
    */
   getAllExams: async () => {
     try {
-      const response = await axiosInstance.get(API_ENDPOINTS.EXAMS.GET_ALL);
+      const response = await academicAxios.get(API_ENDPOINTS.EXAMS.GET_ALL);
       // Backend returns { success, message, data }
       if (response.data && response.data.data) {
         return response.data.data;
@@ -73,7 +73,7 @@ const managerService = {
    */
   getSubmissionsByExam: async (examId) => {
     try {
-      const response = await axiosInstance.get(`/api/v1/Submissions?examId=${examId}`);
+      const response = await academicAxios.get(`/api/v1/Submissions?examId=${examId}`);
       return response.data.data || [];
     } catch (error) {
       console.error('Error fetching submissions:', error);
@@ -87,7 +87,7 @@ const managerService = {
    */
   getSubmissionsByExaminer: async (examinerId) => {
     try {
-      const response = await axiosInstance.get(`/api/v1/Submissions?examinerId=${examinerId}`);
+      const response = await academicAxios.get(`/api/v1/Submissions?examinerId=${examinerId}`);
       return response.data.data || [];
     } catch (error) {
       console.error('Error fetching submissions:', error);

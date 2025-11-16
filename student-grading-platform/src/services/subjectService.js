@@ -1,11 +1,11 @@
-import axios from '../config/axiosConfig';
+import { academicAxios } from '../config/axiosConfig';
 import { API_ENDPOINTS } from '../config/api';
 
 const subjectService = {
   // Get all subjects
   getAllSubjects: async () => {
     try {
-      const response = await axios.get('/api/v1/subjects');
+      const response = await academicAxios.get(API_ENDPOINTS.SUBJECTS.GET_ALL);
       // Map API response to UI format
       const subjects = response.data.data || [];
       return subjects.map(subject => ({
@@ -22,7 +22,7 @@ const subjectService = {
   // Get subject by ID
   getSubjectById: async (id) => {
     try {
-      const response = await axios.get(`/api/v1/subjects/${id}`);
+      const response = await academicAxios.get(API_ENDPOINTS.SUBJECTS.GET_BY_ID(id));
       const subject = response.data.data;
       return {
         id: subject.subjectId,
@@ -43,7 +43,7 @@ const subjectService = {
         subjectCode: subjectData.code,
         subjectName: subjectData.name
       };
-      const response = await axios.post('/api/v1/subjects', apiData);
+      const response = await academicAxios.post(API_ENDPOINTS.SUBJECTS.CREATE, apiData);
       // Map response back to UI format
       const subject = response.data.data;
       return {
@@ -65,7 +65,7 @@ const subjectService = {
         subjectCode: subjectData.code,
         subjectName: subjectData.name
       };
-      const response = await axios.put(`/api/v1/subjects/${id}`, apiData);
+      const response = await academicAxios.put(API_ENDPOINTS.SUBJECTS.UPDATE(id), apiData);
       // Map response back to UI format
       const subject = response.data.data;
       return {
@@ -82,7 +82,7 @@ const subjectService = {
   // Delete subject
   deleteSubject: async (id) => {
     try {
-      await axios.delete(`/api/v1/subjects/${id}`);
+      await academicAxios.delete(API_ENDPOINTS.SUBJECTS.DELETE(id));
       return true;
     } catch (error) {
       console.error('Error deleting subject:', error);

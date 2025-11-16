@@ -1,11 +1,13 @@
-import axiosInstance from '../config/axiosConfig';
+import { academicAxios } from '../config/axiosConfig';
+import { API_ENDPOINTS } from '../config/api';
 
 const violationService = {
   // Get all violations
   getAllViolations: async () => {
     try {
-      const response = await axiosInstance.get('/api/v1/violation');
-      return response.map(violation => ({
+      const response = await academicAxios.get(API_ENDPOINTS.VIOLATIONS.GET_ALL);
+      const violations = response.data?.data || [];
+      return violations.map(violation => ({
         id: violation.violationId,
         submissionId: violation.submissionId,
         type: violation.type,
@@ -13,6 +15,7 @@ const violationService = {
         penalty: violation.penalty,
         severity: violation.severity,
         detectedAt: violation.detectedAt,
+        resolved: violation.resolved || false,
         _original: violation
       }));
     } catch (error) {
@@ -24,16 +27,19 @@ const violationService = {
   // Get violation by ID
   getViolationById: async (id) => {
     try {
-      const response = await axiosInstance.get(`/api/v1/violation/${id}`);
+      const response = await academicAxios.get(API_ENDPOINTS.VIOLATIONS.GET_BY_ID(id));
+      const violation = response.data?.data;
+      if (!violation) return null;
       return {
-        id: response.violationId,
-        submissionId: response.submissionId,
-        type: response.type,
-        description: response.description,
-        penalty: response.penalty,
-        severity: response.severity,
-        detectedAt: response.detectedAt,
-        _original: response
+        id: violation.violationId,
+        submissionId: violation.submissionId,
+        type: violation.type,
+        description: violation.description,
+        penalty: violation.penalty,
+        severity: violation.severity,
+        detectedAt: violation.detectedAt,
+        resolved: violation.resolved || false,
+        _original: violation
       };
     } catch (error) {
       console.error('Error fetching violation:', error);
@@ -53,18 +59,20 @@ const violationService = {
         Severity: violationData.severity
       };
       
-      const response = await axiosInstance.post('/api/v1/violation', apiData);
+      const response = await academicAxios.post(API_ENDPOINTS.VIOLATIONS.CREATE, apiData);
+      const violation = response.data?.data;
       
       // Map response back to UI format
       return {
-        id: response.violationId,
-        submissionId: response.submissionId,
-        type: response.type,
-        description: response.description,
-        penalty: response.penalty,
-        severity: response.severity,
-        detectedAt: response.detectedAt,
-        _original: response
+        id: violation.violationId,
+        submissionId: violation.submissionId,
+        type: violation.type,
+        description: violation.description,
+        penalty: violation.penalty,
+        severity: violation.severity,
+        detectedAt: violation.detectedAt,
+        resolved: violation.resolved || false,
+        _original: violation
       };
     } catch (error) {
       console.error('Error creating violation:', error);
@@ -92,22 +100,25 @@ const violationService = {
         console.log(pair[0] + ': ' + pair[1]);
       }
       
-      const response = await axiosInstance.put(`/api/v1/violation/${id}/update`, formData, {
+      const response = await academicAxios.put(API_ENDPOINTS.VIOLATIONS.UPDATE(id), formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
       
+      const violation = response.data?.data;
+      
       // Map response back to UI format
       return {
-        id: response.violationId,
-        submissionId: response.submissionId,
-        type: response.type,
-        description: response.description,
-        penalty: response.penalty,
-        severity: response.severity,
-        detectedAt: response.detectedAt,
-        _original: response
+        id: violation.violationId,
+        submissionId: violation.submissionId,
+        type: violation.type,
+        description: violation.description,
+        penalty: violation.penalty,
+        severity: violation.severity,
+        detectedAt: violation.detectedAt,
+        resolved: violation.resolved || false,
+        _original: violation
       };
     } catch (error) {
       console.error('Error updating violation:', error);
@@ -123,7 +134,7 @@ const violationService = {
   // Delete violation
   deleteViolation: async (id) => {
     try {
-      await axiosInstance.patch(`/api/v1/violation/${id}/delete`);
+      await academicAxios.patch(API_ENDPOINTS.VIOLATIONS.DELETE(id));
       return true;
     } catch (error) {
       console.error('Error deleting violation:', error);

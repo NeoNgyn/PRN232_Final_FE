@@ -12,7 +12,8 @@
  * UI Format: { id, name, maxScore, order, examId }
  */
 
-import axiosInstance from '../config/axiosConfig';
+import { academicAxios } from '../config/axiosConfig';
+import { API_ENDPOINTS } from '../config/api';
 
 // Map API response to UI format - Handle both PascalCase and camelCase
 const mapCriteriaToUI = (apiCriteria) => {
@@ -31,7 +32,8 @@ const mapCriteriaToUI = (apiCriteria) => {
 // Get all criteria with optional query parameters
 export const getAllCriteria = async (queryParams = {}) => {
   try {
-    const data = await axiosInstance.get('/api/v1/criteria', { params: queryParams });
+    const response = await academicAxios.get(API_ENDPOINTS.CRITERIA.GET_ALL, { params: queryParams });
+    const data = response.data?.data || [];
     return Array.isArray(data) ? data.map(mapCriteriaToUI).filter(Boolean) : [];
   } catch (error) {
     console.error('Error fetching all criteria:', error);
@@ -42,7 +44,8 @@ export const getAllCriteria = async (queryParams = {}) => {
 // Query criteria with OData support
 export const queryCriteria = async (odataQuery = '') => {
   try {
-    const data = await axiosInstance.get(`/api/v1/criteria/query${odataQuery ? `?${odataQuery}` : ''}`);
+    const response = await academicAxios.get(`${API_ENDPOINTS.CRITERIA.QUERY}${odataQuery ? `?${odataQuery}` : ''}`);
+    const data = response.data?.data || [];
     return Array.isArray(data) ? data.map(mapCriteriaToUI).filter(Boolean) : [];
   } catch (error) {
     console.error('Error querying criteria:', error);
@@ -53,7 +56,8 @@ export const queryCriteria = async (odataQuery = '') => {
 // Get criteria by ID
 export const getCriteriaById = async (id) => {
   try {
-    const data = await axiosInstance.get(`/api/v1/criteria/${id}`);
+    const response = await academicAxios.get(API_ENDPOINTS.CRITERIA.GET_BY_ID(id));
+    const data = response.data?.data;
     return data ? mapCriteriaToUI(data) : null;
   } catch (error) {
     console.error('Error fetching criteria by ID:', error);
@@ -76,7 +80,8 @@ export const createCriteria = async (criteriaData) => {
   try {
     const apiData = mapUIToAPI(criteriaData);
     console.log('Creating criteria:', apiData);
-    const data = await axiosInstance.post('/api/v1/criteria', apiData);
+    const response = await academicAxios.post(API_ENDPOINTS.CRITERIA.CREATE, apiData);
+    const data = response.data?.data;
     console.log('Criteria created successfully:', data);
     return data ? mapCriteriaToUI(data) : null;
   } catch (error) {
@@ -103,10 +108,11 @@ export const updateCriteria = async (id, criteriaData) => {
       console.log(pair[0] + ': ' + pair[1]);
     }
 
-    const data = await axiosInstance.put(`/api/v1/criteria/${id}/update`, formData, {
+    const response = await academicAxios.put(API_ENDPOINTS.CRITERIA.UPDATE(id), formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
     
+    const data = response.data?.data;
     console.log('Criteria updated successfully:', data);
     return data ? mapCriteriaToUI(data) : null;
   } catch (error) {
@@ -119,7 +125,7 @@ export const updateCriteria = async (id, criteriaData) => {
 export const deleteCriteria = async (id) => {
   try {
     console.log('Deleting criteria ID:', id);
-    await axiosInstance.delete(`/api/v1/criteria/${id}/delete`);
+    await academicAxios.delete(API_ENDPOINTS.CRITERIA.DELETE(id));
     console.log('Criteria deleted successfully');
     return { success: true };
   } catch (error) {
@@ -132,10 +138,11 @@ export const deleteCriteria = async (id) => {
 export const getCriteriaByExamId = async (examId) => {
   try {
     console.log('[CriteriaService] Fetching criteria for exam ID:', examId);
-    console.log('[CriteriaService] API URL:', `/api/v1/criteria/exam/${examId}`);
+    console.log('[CriteriaService] API URL:', `/api/v1/criterias/exam/${examId}`);
     
-    // Backend endpoint: /api/v1/criteria/exam/{examId}
-    const data = await axiosInstance.get(`/api/v1/criteria/exam/${examId}`);
+    // Backend endpoint: /api/v1/criterias/exam/{examId} - note the 's' in criterias
+    const response = await academicAxios.get(`/api/v1/criterias/exam/${examId}`);
+    const data = response.data?.data || [];
     
     console.log('[CriteriaService] Raw response:', data);
     console.log('[CriteriaService] Is array?', Array.isArray(data));

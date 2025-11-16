@@ -2,8 +2,8 @@
  * Axios Configuration
  * 
  * Multiple axios instances for microservices architecture:
- * - identityAxios: Authentication service (Port 5001)
- * - academicAxios: Academic data service (Port 5003)
+ * - identityAxios: Authentication service (Port 5000)
+ * - academicAxios: Academic data service (Port 5002)
  * 
  * Each instance has interceptors for:
  * - Authentication headers
@@ -13,6 +13,10 @@
 
 import axios from 'axios';
 import { IDENTITY_SERVICE_URL, ACADEMIC_SERVICE_URL } from './api';
+
+// Debug: Log service URLs
+console.log('[AxiosConfig] IDENTITY_SERVICE_URL:', IDENTITY_SERVICE_URL);
+console.log('[AxiosConfig] ACADEMIC_SERVICE_URL:', ACADEMIC_SERVICE_URL);
 
 // Create request interceptor function (reusable)
 const createRequestInterceptor = (serviceName) => (config) => {
@@ -81,7 +85,7 @@ const createResponseInterceptor = (serviceName) => ({
   }
 });
 
-// IdentityService axios instance (Port 5001)
+// IdentityService axios instance (Port 5000)
 const identityAxios = axios.create({
   baseURL: IDENTITY_SERVICE_URL,
   timeout: 30000,
@@ -90,7 +94,7 @@ const identityAxios = axios.create({
   }
 });
 
-// AcademicService axios instance (Port 5003)
+// AcademicService axios instance (Port 5002)
 const academicAxios = axios.create({
   baseURL: ACADEMIC_SERVICE_URL,
   timeout: 30000,
@@ -98,6 +102,9 @@ const academicAxios = axios.create({
     'Content-Type': 'application/json',
   }
 });
+
+console.log('[AxiosConfig] academicAxios.defaults.baseURL:', academicAxios.defaults.baseURL);
+console.log('[AxiosConfig] identityAxios.defaults.baseURL:', identityAxios.defaults.baseURL);
 
 // Add interceptors to IdentityService instance
 identityAxios.interceptors.request.use(

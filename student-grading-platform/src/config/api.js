@@ -1,9 +1,9 @@
 // API Configuration - Multiple Microservices
 // IdentityService: Authentication (Google Login, JWT, etc.)
-const IDENTITY_SERVICE_URL = process.env.REACT_APP_IDENTITY_SERVICE_URL || 'https://localhost:5001';
+const IDENTITY_SERVICE_URL = process.env.REACT_APP_IDENTITY_SERVICE_URL || 'http://localhost:5000';
 
 // AcademicService: Subjects, Semesters, Criteria, etc.
-const ACADEMIC_SERVICE_URL = process.env.REACT_APP_ACADEMIC_SERVICE_URL || 'https://localhost:5003';
+const ACADEMIC_SERVICE_URL = process.env.REACT_APP_ACADEMIC_SERVICE_URL || 'http://localhost:5002';
 
 export const API_ENDPOINTS = {
   // IdentityService endpoints (Port 5001)
@@ -13,14 +13,23 @@ export const API_ENDPOINTS = {
     LOGOUT: `${IDENTITY_SERVICE_URL}/api/v1/auth/logout`
   },
   
+  USERS: {
+    GET_ALL: `${IDENTITY_SERVICE_URL}/api/v1/users`,
+    GET_TEACHERS: `${IDENTITY_SERVICE_URL}/api/v1/users/teachers`,
+    GET_BY_ID: (id) => `${IDENTITY_SERVICE_URL}/api/v1/users/${id}`,
+    CREATE: `${IDENTITY_SERVICE_URL}/api/v1/users`,
+    UPDATE: (id) => `${IDENTITY_SERVICE_URL}/api/v1/users/${id}`,
+    DELETE: (id) => `${IDENTITY_SERVICE_URL}/api/v1/users/${id}`
+  },
+  
   // AcademicService endpoints (Port 5003)
   CRITERIA: {
-    GET_ALL: `${ACADEMIC_SERVICE_URL}/api/v1/criterias`,
-    QUERY: `${ACADEMIC_SERVICE_URL}/api/v1/criterias/query`,
-    GET_BY_ID: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/criterias/${id}`,
-    CREATE: `${ACADEMIC_SERVICE_URL}/api/v1/criterias`,
-    UPDATE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/criterias/${id}`,
-    DELETE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/criterias/${id}`
+    GET_ALL: `${ACADEMIC_SERVICE_URL}/api/v1/criteria`,
+    QUERY: `${ACADEMIC_SERVICE_URL}/api/v1/criteria/query`,
+    GET_BY_ID: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/criteria/${id}`,
+    CREATE: `${ACADEMIC_SERVICE_URL}/api/v1/criteria`,
+    UPDATE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/criteria/${id}/update`,
+    DELETE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/criteria/${id}/delete`
   },
   SUBJECTS: {
     GET_ALL: `${ACADEMIC_SERVICE_URL}/api/v1/subjects`,
@@ -44,12 +53,12 @@ export const API_ENDPOINTS = {
     DELETE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/exams/${id}`
   },
   SUBMISSIONS: {
-    GET_ALL: `${ACADEMIC_SERVICE_URL}/api/v1/submissions`,
-    QUERY: `${ACADEMIC_SERVICE_URL}/api/v1/submissions/query`,
-    GET_BY_ID: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/submissions/${id}`,
-    CREATE: `${ACADEMIC_SERVICE_URL}/api/v1/submissions`,
-    UPDATE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/submissions/${id}`,
-    DELETE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/submissions/${id}`
+    GET_ALL: `${ACADEMIC_SERVICE_URL}/api/v1/submission`,
+    QUERY: `${ACADEMIC_SERVICE_URL}/api/v1/submission/query`,
+    GET_BY_ID: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/submission/${id}`,
+    CREATE: `${ACADEMIC_SERVICE_URL}/api/v1/submission`,
+    UPDATE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/submission/${id}/update`,
+    DELETE: (id) => `${ACADEMIC_SERVICE_URL}/api/v1/submission/${id}/delete`
   },
   VIOLATIONS: {
     GET_ALL: `${ACADEMIC_SERVICE_URL}/api/v1/violation`,

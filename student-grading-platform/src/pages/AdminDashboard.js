@@ -6,9 +6,13 @@ import * as fileService from '../services/fileService';
 import subjectService from '../services/subjectService';
 import semesterService from '../services/semesterService';
 import examService from '../services/examService';
+import managerService from '../services/managerService';
 import './AdminDashboard.css';
 
-function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams, teachers, semesters, setSemesters }) {
+function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams, semesters, setSemesters }) {
+  const [teachers, setTeachers] = useState([]);
+  const [isLoadingTeachers, setIsLoadingTeachers] = useState(false);
+  const [teachersError, setTeachersError] = useState(null);
   const [showSubjectModal, setShowSubjectModal] = useState(false);
   const [showSemesterModal, setShowSemesterModal] = useState(false);
   const [showExamModal, setShowExamModal] = useState(false);
@@ -94,6 +98,25 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
 
     fetchExams();
   }, [setExams]);
+
+  // Fetch teachers on mount
+  useEffect(() => {
+    const fetchTeachers = async () => {
+      setIsLoadingTeachers(true);
+      setTeachersError(null);
+      try {
+        const fetchedTeachers = await managerService.getAllTeachers();
+        setTeachers(fetchedTeachers);
+      } catch (error) {
+        setTeachersError('Không thể tải danh sách giáo viên. Vui lòng thử lại.');
+        console.error('Error fetching teachers:', error);
+      } finally {
+        setIsLoadingTeachers(false);
+      }
+    };
+
+    fetchTeachers();
+  }, []);
 
   const handleAddSubject = async (e) => {
     e.preventDefault();
