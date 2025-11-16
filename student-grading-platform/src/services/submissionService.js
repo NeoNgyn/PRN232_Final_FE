@@ -38,12 +38,8 @@ const submissionService = {
   // Get submissions by exam ID and examiner ID
   getSubmissionsByExamAndExaminer: async (examId, examinerId) => {
     try {
-      const response = await axiosInstance.get('/api/v1/submission/by-exam-examiner', {
-        params: {
-          examId,
-          examinerId
-        }
-      });
+      // Use path parameters to match backend route: /api/v1/submission/exam/{examId}/examiner/{examinerId}
+      const response = await axiosInstance.get(`/api/v1/submission/exam/${examId}/examiner/${examinerId}`);
       
       // Filter out invalid submissions and map to UI format
       return response
@@ -62,8 +58,8 @@ const submissionService = {
           violations: submission.violations || [],
           // Student info
           student: submission.student ? {
-            studentId: submission.student.studentId,
-            fullName: submission.student.fullName
+            studentId: submission.student.StudentId || submission.student.studentId,
+            fullName: submission.student.FullName || submission.student.fullName
           } : null,
           // Exam info
           exam: submission.exam ? {
@@ -201,6 +197,113 @@ const submissionService = {
     } catch (error) {
       console.error('Error deleting submission:', error);
       throw error;
+    }
+  },
+
+  // Query submissions with OData filters (search by student name or ID)
+  querySubmissions: async (examId, examinerId, searchTerm = '') => {
+    try {
+      console.log('=== Query Submissions ===');
+      console.log('examId:', examId);
+      console.log('examinerId:', examinerId);
+      console.log('searchTerm:', searchTerm);
+      
+      // Build params object
+      const params = {};
+      
+      // Build OData filter query - Always filter by examId and examinerId
+      let filterParts = [];
+      
+      // IMPORTANT: OData GUID format must be: guid'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+      if (examId) {
+        filterParts.push(`ExamId eq ${examId}`);
+      }
+      
+      if (examinerId) {
+        filterParts.push(`ExaminerId eq ${examinerId}`);
+      }
+      
+      // Add search filter if searchTerm is provided
+      if (searchTerm && searchTerm.trim()) {
+        const search = searchTerm.trim().toUpperCase(); // Convert to uppercase for case-insensitive
+        // Search in StudentId or Student FullName
+        const searchFilter = `(contains(toupper(StudentId), '${search}') or contains(toupper(Student/FullName), '${search}'))`;
+        filterParts.push(searchFilter);
+      }
+      
+      // Join all filter parts
+      if (filterParts.length > 0) {
+        params.$filter = filterParts.join(' and ');
+      }
+      
+      // Always expand related entities
+      params.$expand = 'Student,Exam($expand=Subject,Semester)';
+
+      console.log('OData params:', params);
+
+      // Call OData endpoint
+      const response = await axiosInstance.get('/api/v1/submission/query', { params });
+
+      console.log('OData raw response:', response);
+
+      // Handle different response formats
+      // OData might return array directly or { value: [...] }
+      let submissions = Array.isArray(response) ? response : (response.value || []);
+      
+      console.log('Parsed submissions array:', submissions);
+      console.log('Number of submissions:', submissions.length);
+      
+      // If no data, return empty array instead of throwing error
+      if (!submissions || submissions.length === 0) {
+        console.log('No submissions found');
+        return [];
+      }
+      
+      // Map to UI format - Handle both PascalCase (OData) and camelCase
+      return submissions
+        .filter(submission => submission && (submission.submissionId || submission.SubmissionId))
+        .map(submission => {
+          console.log('Mapping submission:', submission);
+          
+          return {
+            id: submission.SubmissionId || submission.submissionId,
+            examId: submission.ExamId || submission.examId,
+            studentId: submission.StudentId || submission.studentId || 'Unknown',
+            examinerId: submission.ExaminerId || submission.examinerId,
+            filePath: submission.FilePath || submission.filePath,
+            originalFileName: submission.OriginalFileName || submission.originalFileName,
+            uploadedAt: submission.UploadedAt || submission.uploadedAt,
+            totalScore: submission.TotalScore ?? submission.totalScore ?? 0,
+            gradingStatus: submission.GradingStatus || submission.gradingStatus || 'Pending',
+            grades: submission.Grades || submission.grades || [],
+            violations: submission.Violations || submission.violations || [],
+            // Student info - OData returns PascalCase
+            student: (submission.Student || submission.student) ? {
+              studentId: submission.Student?.StudentId || submission.student?.studentId || submission.Student?.StudentId,
+              fullName: submission.Student?.FullName || submission.student?.fullName || submission.Student?.FullName
+            } : null,
+            // Exam info - OData returns PascalCase
+            exam: (submission.Exam || submission.exam) ? {
+              examId: submission.Exam?.ExamId || submission.exam?.examId,
+              examName: submission.Exam?.ExamName || submission.exam?.examName,
+              examType: submission.Exam?.ExamType || submission.exam?.examType,
+              subject: (submission.Exam?.Subject || submission.exam?.subject) ? {
+                subjectCode: submission.Exam?.Subject?.SubjectCode || submission.exam?.subject?.subjectCode,
+                subjectName: submission.Exam?.Subject?.SubjectName || submission.exam?.subject?.subjectName
+              } : null,
+              semester: (submission.Exam?.Semester || submission.exam?.semester) ? {
+                semesterCode: submission.Exam?.Semester?.SemesterCode || submission.exam?.semester?.semesterCode,
+                semesterName: submission.Exam?.Semester?.SemesterName || submission.exam?.semester?.semesterName
+              } : null
+            } : null,
+            _original: submission
+          };
+        });
+    } catch (error) {
+      console.error('Error querying submissions:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      // Return empty array on error to prevent UI crash
+      return [];
     }
   }
 };

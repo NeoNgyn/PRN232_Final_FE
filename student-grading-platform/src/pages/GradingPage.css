@@ -3,6 +3,18 @@
   background: #f5f7fa;
 }
 
+/* Pulse animation for live indicator */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+}
+
 .grading-header {
   background: white;
   padding: 24px 32px;
@@ -102,6 +114,29 @@
   border-color: #48bb78;
 }
 
+.student-card.failed {
+  background: linear-gradient(135deg, #fee 0%, #fdd 100%);
+  border-color: #e53e3e;
+}
+
+/* Search Box Styles */
+.search-box-container {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.search-input {
+  transition: all 0.2s ease;
+}
+
+.search-input:hover {
+  border-color: #a0aec0 !important;
+}
+
+.search-input:focus {
+  border-color: #4299e1 !important;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
 .student-card-header {
   display: flex;
   justify-content: space-between;
@@ -117,8 +152,16 @@
   color: #48bb78;
 }
 
+.student-card.failed .student-card-header svg:first-child {
+  color: #e53e3e;
+}
+
 .graded-icon {
   color: #48bb78 !important;
+}
+
+.student-card.failed .graded-icon {
+  color: #e53e3e !important;
 }
 
 .student-card-body h3 {
