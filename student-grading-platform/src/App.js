@@ -146,12 +146,15 @@ function App() {
             } 
           />
           <Route 
-            path="/violations" 
+            path="/grading/:examId/submission/:submissionId" 
             element={
-              user && (user.role === 'teacher' || user.role === 'manager' || user.role === 'admin') ? (
-                <ViolationManagement 
+              user && user.role === 'teacher' ? (
+                <GradingPage 
                   user={user} 
                   onLogout={handleLogout}
+                  exams={exams}
+                  setExams={setExams}
+                  subjects={subjects}
                 />
               ) : (
                 <Navigate to="/" />

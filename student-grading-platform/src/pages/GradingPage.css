@@ -628,13 +628,14 @@
   font-size: 14px;
 }
 
-.loading-spinner-small {
+.loading-spinner-small, .spinner-small {
   border: 3px solid #e2e8f0;
   border-top: 3px solid #667eea;
   border-radius: 50%;
   width: 20px;
   height: 20px;
   animation: spin 1s linear infinite;
+  display: inline-block;
 }
 
 .comparison-result {
@@ -1004,6 +1005,17 @@
 .btn-criteria-action.btn-edit:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+}
+
+.btn-criteria-action.btn-update {
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  color: #2d3748;
+  font-weight: 600;
+}
+
+.btn-criteria-action.btn-update:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(252, 182, 159, 0.4);
 }
 
 .criteria-description {
@@ -1723,4 +1735,34 @@
     width: 100%;
     justify-content: center;
   }
+}
+
+/* Status Badge Styles */
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.passed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.grading {
+  background: #dbeafe;
+  color: #1e40af;
 }

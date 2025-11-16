@@ -153,3 +153,17 @@
 .graded-icon {
   background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
 }
+
+/* Loading spinner animation */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

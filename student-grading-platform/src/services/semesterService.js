@@ -5,7 +5,7 @@ const semesterService = {
   // Get all semesters
   getAllSemesters: async () => {
     try {
-      const response = await axios.get(API_ENDPOINTS.SEMESTERS.GET_ALL);
+      const response = await axios.get('/api/v1/semesters');
       // Map API response to UI format
       return (response.data.data || []).map(semester => ({
         id: semester.semesterId,
@@ -21,7 +21,7 @@ const semesterService = {
   // Get semester by ID
   getSemesterById: async (id) => {
     try {
-      const response = await axios.get(API_ENDPOINTS.SEMESTERS.GET_BY_ID(id));
+      const response = await axios.get(`/api/v1/semesters/${id}`);
       return {
         id: response.semesterId,
         code: response.semesterCode,
@@ -41,7 +41,7 @@ const semesterService = {
         semesterCode: semesterData.code,
         semesterName: semesterData.name || null
       };
-      const response = await axios.post(API_ENDPOINTS.SEMESTERS.CREATE, apiData);
+      const response = await axios.post('/api/v1/semesters', apiData);
       // Map response back to UI format
       const data = response.data.data;
       return {
@@ -63,7 +63,7 @@ const semesterService = {
         semesterCode: semesterData.code,
         semesterName: semesterData.name || null
       };
-      const response = await axios.put(API_ENDPOINTS.SEMESTERS.UPDATE(id), apiData);
+      const response = await axios.put(`/api/v1/semesters/${id}`, apiData);
       // Map response back to UI format
       const data = response.data.data;
       return {
@@ -80,7 +80,7 @@ const semesterService = {
   // Delete semester
   deleteSemester: async (id) => {
     try {
-      await axios.delete(API_ENDPOINTS.SEMESTERS.DELETE(id));
+      await axios.delete(`/api/v1/semesters/${id}`);
       return true;
     } catch (error) {
       console.error('Error deleting semester:', error);

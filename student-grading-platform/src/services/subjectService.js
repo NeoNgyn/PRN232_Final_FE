@@ -1,14 +1,13 @@
-import axios from 'axios';
+import axios from '../config/axiosConfig';
 import { API_ENDPOINTS } from '../config/api';
 
 const subjectService = {
   // Get all subjects
   getAllSubjects: async () => {
     try {
-      const response = await axios.get(API_ENDPOINTS.SUBJECTS.GET_ALL);
-      // API returns: { status_code, message, reason, is_success, data }
-      const subjects = response.data.data || [];
+      const response = await axios.get('/api/v1/subjects');
       // Map API response to UI format
+      const subjects = response.data.data || [];
       return subjects.map(subject => ({
         id: subject.subjectId,
         code: subject.subjectCode,
@@ -23,7 +22,7 @@ const subjectService = {
   // Get subject by ID
   getSubjectById: async (id) => {
     try {
-      const response = await axios.get(`${API_ENDPOINTS.SUBJECTS.GET_BY_ID}/${id}`);
+      const response = await axios.get(`/api/v1/subjects/${id}`);
       const subject = response.data.data;
       return {
         id: subject.subjectId,
@@ -44,9 +43,9 @@ const subjectService = {
         subjectCode: subjectData.code,
         subjectName: subjectData.name
       };
-      const response = await axios.post(API_ENDPOINTS.SUBJECTS.CREATE, apiData);
-      const subject = response.data.data;
+      const response = await axios.post('/api/v1/subjects', apiData);
       // Map response back to UI format
+      const subject = response.data.data;
       return {
         id: subject.subjectId,
         code: subject.subjectCode,
@@ -66,9 +65,9 @@ const subjectService = {
         subjectCode: subjectData.code,
         subjectName: subjectData.name
       };
-      const response = await axios.put(`${API_ENDPOINTS.SUBJECTS.UPDATE}/${id}`, apiData);
-      const subject = response.data.data;
+      const response = await axios.put(`/api/v1/subjects/${id}`, apiData);
       // Map response back to UI format
+      const subject = response.data.data;
       return {
         id: subject.subjectId,
         code: subject.subjectCode,
@@ -83,7 +82,7 @@ const subjectService = {
   // Delete subject
   deleteSubject: async (id) => {
     try {
-      await axios.delete(`${API_ENDPOINTS.SUBJECTS.DELETE}/${id}`);
+      await axios.delete(`/api/v1/subjects/${id}`);
       return true;
     } catch (error) {
       console.error('Error deleting subject:', error);
