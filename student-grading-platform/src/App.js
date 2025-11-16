@@ -128,6 +128,22 @@ function App() {
               )
             } 
           />
+          <Route 
+            path="/grading/:examId/submission/:submissionId" 
+            element={
+              user && user.role === 'teacher' ? (
+                <GradingPage 
+                  user={user} 
+                  onLogout={handleLogout}
+                  exams={exams}
+                  setExams={setExams}
+                  subjects={subjects}
+                />
+              ) : (
+                <Navigate to="/" />
+              )
+            } 
+          />
         </Routes>
       </div>
     </Router>

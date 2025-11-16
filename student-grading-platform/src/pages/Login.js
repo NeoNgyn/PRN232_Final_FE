@@ -174,6 +174,8 @@ function Login({ onLogin }) {
           <p>Hệ thống quản lý và chấm bài cho giáo viên</p>
         </div>
 
+        {/* Commented out username/password login - only using Google Sign-In */}
+        {/* 
         <form onSubmit={handleSubmit} className="login-form">
           {error && <div className="error-message">{error}</div>}
           
@@ -208,6 +210,9 @@ function Login({ onLogin }) {
         <div className="divider">
           <span>hoặc</span>
         </div>
+        */}
+
+        {error && <div className="error-message">{error}</div>}
 
         {/* Google Sign-In Button Container */}
         <div 
@@ -229,6 +234,8 @@ function Login({ onLogin }) {
           </div>
         )}
 
+        {/* Commented out demo accounts section */}
+        {/* 
         <div className="demo-accounts">
           <h3>Tài khoản demo:</h3>
           <div className="demo-list">
@@ -240,6 +247,7 @@ function Login({ onLogin }) {
             </div>
           </div>
         </div>
+        */}
       </div>
     </div>
   );

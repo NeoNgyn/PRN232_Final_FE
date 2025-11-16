@@ -7,14 +7,32 @@ import {
 import mammoth from 'mammoth';
 import * as criteriaService from '../services/criteriaService';
 import gradeService from '../services/gradeService';
+import submissionService from '../services/submissionService';
+import examService from '../services/examService';
+import subjectService from '../services/subjectService';
+import violationService from '../services/violationService';
 import './GradingPage.css';
 
 function GradingPage({ user, onLogout, exams, setExams, subjects }) {
-  const { examId } = useParams();
+  const { examId, submissionId } = useParams();
   const navigate = useNavigate();
-  const exam = exams.find(e => e.id === parseInt(examId));
+  
+  // Exam state - fetch from backend
+  const [exam, setExam] = useState(null);
+  const [isLoadingExam, setIsLoadingExam] = useState(true);
+  const [examError, setExamError] = useState(null);
+  
+  // Subject state - fetch from backend
+  const [subject, setSubject] = useState(null);
+  
+  // Submissions from backend
+  const [submissions, setSubmissions] = useState([]);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = useState(true);
+  const [submissionsError, setSubmissionsError] = useState(null);
   
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [submissionDetail, setSubmissionDetail] = useState(null);
+  const [isLoadingSubmissionDetail, setIsLoadingSubmissionDetail] = useState(false);
   const [scores, setScores] = useState({});
   const [notes, setNotes] = useState({});
   const [addedCriteria, setAddedCriteria] = useState({}); // Track which criteria have been added
@@ -44,8 +62,259 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     description: '',
     severity: 'Warning'
   });
+  const [isLoadingViolation, setIsLoadingViolation] = useState(false);
+  const [violationError, setViolationError] = useState(null);
 
-  // Load document content from Blob when student is selected
+  // Fetch exam from backend when component mounts
+  useEffect(() => {
+    const fetchExam = async () => {
+      if (!examId) return;
+      
+      setIsLoadingExam(true);
+      setExamError(null);
+      
+      try {
+        const fetchedExam = await examService.getExamById(examId);
+        setExam(fetchedExam);
+        
+        // Fetch subject info
+        if (fetchedExam.subjectId) {
+          try {
+            const fetchedSubject = await subjectService.getSubjectById(fetchedExam.subjectId);
+            setSubject(fetchedSubject);
+          } catch (error) {
+            console.error('Error fetching subject:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching exam:', error);
+        setExamError('Không thể tải thông tin bài thi.');
+      } finally {
+        setIsLoadingExam(false);
+      }
+    };
+    
+    fetchExam();
+  }, [examId]);
+
+  // Fetch submissions from backend when exam is loaded
+  useEffect(() => {
+    const fetchSubmissions = async () => {
+      if (!exam || !user.id) return;
+      
+      setIsLoadingSubmissions(true);
+      setSubmissionsError(null);
+      
+      try {
+        const fetchedSubmissions = await submissionService.getSubmissionsByExamAndExaminer(exam.id, user.id);
+        
+        // Map submissions to student format for UI compatibility
+        const studentsFromSubmissions = fetchedSubmissions.map(sub => ({
+          id: sub.id,
+          studentId: sub.studentId,
+          studentName: sub.studentId, // Will be updated from backend later if needed
+          fileName: sub.originalFileName,
+          fileUrl: sub.filePath,
+          uploadedAt: sub.uploadedAt,
+          totalScore: sub.totalScore,
+          gradingStatus: sub.gradingStatus,
+          graded: sub.gradingStatus === 'Passed' || sub.gradingStatus === 'Failed',
+          grades: sub.grades || [],
+          violations: sub.violations || [],
+          _submission: sub
+        }));
+        
+        setSubmissions(studentsFromSubmissions);
+      } catch (error) {
+        console.error('Error fetching submissions:', error);
+        setSubmissionsError('Kh\u00f4ng th\u1ec3 t\u1ea3i danh s\u00e1ch b\u00e0i n\u1ed9p.');
+      } finally {
+        setIsLoadingSubmissions(false);
+      }
+    };
+    
+    fetchSubmissions();
+  }, [exam, user.id]);
+
+  // Auto-select submission when submissionId is in URL
+  useEffect(() => {
+    if (submissionId && submissions.length > 0) {
+      const submission = submissions.find(s => s.id === submissionId);
+      console.log('Auto-loading submission from URL:', submissionId);
+      console.log('Found submission:', submission);
+      
+      if (submission) {
+        // Only load if different from current or if no submissionDetail
+        if (!selectedStudent || selectedStudent.id !== submissionId || !submissionDetail) {
+          console.log('Loading submission detail...');
+          loadSubmissionDetail(submission);
+        }
+      }
+    } else if (!submissionId && selectedStudent) {
+      // If no submissionId in URL but have selectedStudent, clear it
+      console.log('No submissionId in URL, clearing selected student');
+      setSelectedStudent(null);
+      setSubmissionDetail(null);
+    }
+  }, [submissionId, submissions]);
+
+  // Extract handleSelectStudent logic into reusable function
+  const loadSubmissionDetail = async (student) => {
+    console.log('=== Loading submission detail for student:', student.id);
+    
+    // IMPORTANT: Reset ALL state first to ensure clean slate
+    setSelectedStudent(student);
+    setSubmissionDetail(null);
+    setIsLoadingSubmissionDetail(true);
+    
+    // Reset grading state - these will be re-populated if grades exist
+    setScores({});
+    setNotes({});
+    setAddedCriteria({});
+    setGradeIds({});
+    
+    // Reset violations and document
+    setViolations([]);
+    setDocumentContent('');
+    
+    // Fetch submission detail from backend
+    if (student.id) {
+      try {
+        console.log('Fetching submission detail for ID:', student.id);
+        const detail = await submissionService.getSubmissionById(student.id);
+        console.log('Received submission detail:', detail);
+        console.log('Number of existing grades:', detail?.grades?.length || 0);
+        
+        // Set submission detail first
+        setSubmissionDetail(detail);
+        
+        // Pre-fill existing grades ONLY if they exist from backend
+        if (detail.grades && detail.grades.length > 0) {
+          const existingScores = {};
+          const existingNotes = {};
+          const existingGradeIds = {};
+          const existingAdded = {};
+          
+          detail.grades.forEach(grade => {
+            existingScores[grade.criteriaId] = grade.score;
+            existingNotes[grade.criteriaId] = grade.note || '';
+            existingGradeIds[grade.criteriaId] = grade.gradeId;
+            existingAdded[grade.criteriaId] = true;
+          });
+          
+          console.log('Pre-filling grades from backend:', existingScores);
+          console.log('Grade IDs:', existingGradeIds);
+          
+          // Update states with existing grades
+          setScores(existingScores);
+          setNotes(existingNotes);
+          setGradeIds(existingGradeIds);
+          setAddedCriteria(existingAdded);
+        } else {
+          console.log('No existing grades - submission is fresh, keeping empty state');
+          // Explicitly set to empty objects to ensure clean state
+          setScores({});
+          setNotes({});
+          setGradeIds({});
+          setAddedCriteria({});
+        }
+        
+        // Pre-fill existing violations - map from backend format to UI format
+        if (detail.violations && detail.violations.length > 0) {
+          console.log('Raw violations from backend:', detail.violations);
+          const mappedViolations = detail.violations.map(v => {
+            console.log('Mapping violation:', v);
+            return {
+              id: v.violationId,
+              submissionId: v.submissionId,
+              type: v.type || v.violationType || v.Type, // Try multiple field names
+              description: v.description || v.Description,
+              penalty: v.penalty || v.Penalty,
+              severity: v.severity || v.Severity,
+              detectedAt: v.detectedAt || v.DetectedAt
+            };
+          });
+          console.log('Mapped violations:', mappedViolations);
+          setViolations(mappedViolations);
+        } else {
+          // Clear violations if submission has none
+          console.log('No violations for this submission');
+          setViolations([]);
+        }
+        
+        // Load document from Cloudinary URL
+        if (detail.filePath) {
+          await loadDocumentFromUrl(detail.filePath);
+        }
+      } catch (error) {
+        console.error('Error fetching submission detail:', error);
+        alert('Không thể tải thông tin chi tiết bài nộp.');
+      } finally {
+        setIsLoadingSubmissionDetail(false);
+      }
+    }
+  };
+
+  // Load document from Cloudinary URL
+  const loadDocumentFromUrl = async (fileUrl) => {
+    if (!fileUrl) {
+      setDocumentContent('');
+      return;
+    }
+
+    setIsLoadingDocument(true);
+    setDocumentContent('');
+    
+    try {
+      // Fetch file from Cloudinary URL
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
+        throw new Error('Failed to fetch document from URL');
+      }
+      
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Options for mammoth conversion
+      const options = {
+        convertImage: mammoth.images.imgElement(function(image) {
+          return image.read("base64").then(function(imageBuffer) {
+            return {
+              src: "data:" + image.contentType + ";base64," + imageBuffer,
+              alt: image.altText || "Image"
+            };
+          }).catch(function(err) {
+            console.error('Error converting image:', err);
+            return {
+              src: "",
+              alt: "[Image could not be loaded]"
+            };
+          });
+        }),
+        styleMap: [
+          "p[style-name='Heading 1'] => h1",
+          "p[style-name='Heading 2'] => h2",
+          "p[style-name='Heading 3'] => h3",
+          "b => strong",
+          "i => em"
+        ]
+      };
+      
+      // Convert to HTML with images and styling
+      const result = await mammoth.convertToHtml({ arrayBuffer }, options);
+      
+      setDocumentContent(result.value);
+      
+      // Log conversion info
+      console.log('Document loaded from URL. HTML length:', result.value.length);
+    } catch (error) {
+      console.error('Error loading document from URL:', error);
+      setDocumentContent('<p style="color: red;">Kh\u00f4ng th\u1ec3 t\u1ea3i t\u00e0i li\u1ec7u. File c\u00f3 th\u1ec3 kh\u00f4ng t\u1ed3n t\u1ea1i ho\u1eb7c kh\u00f4ng ph\u1ea3i \u0111\u1ecbnh d\u1ea1ng .docx</p>');
+    } finally {
+      setIsLoadingDocument(false);
+    }
+  };
+
+  // Load document content from Blob when student is selected (legacy support)
   const loadDocumentContent = async (student) => {
     if (!student || !student.fileBlob) {
       setDocumentContent('');
@@ -103,31 +372,56 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
 
   // Fetch criteria list from API (uploaded by admin for this exam)
   useEffect(() => {
+    console.log('[Criteria useEffect] Running, exam:', exam);
+    console.log('[Criteria useEffect] exam.id:', exam?.id);
+    
     const fetchCriteria = async () => {
-      if (!exam) return;
+      if (!exam) {
+        console.log('[Criteria useEffect] No exam, skipping fetch');
+        return;
+      }
       
+      if (!exam.id) {
+        console.log('[Criteria useEffect] exam exists but no exam.id:', exam);
+        return;
+      }
+      
+      console.log('[Criteria useEffect] Starting fetch for exam ID:', exam.id);
       setIsLoadingCriteria(true);
       setCriteriaError(null);
       
       try {
         console.log('Fetching criteria for exam ID:', exam.id);
-        // Fetch criteria uploaded by admin for this exam
-        const data = await criteriaService.getAllCriteria({ examId: exam.id });
-        console.log('Criteria fetched successfully:', data);
+        console.log('Full exam object:', exam);
+        // Fetch criteria uploaded by admin for this exam using dedicated endpoint
+        const data = await criteriaService.getCriteriaByExamId(exam.id);
+        console.log('Criteria API response:', data);
+        console.log('Number of criteria:', data?.length);
         
         // If API returns empty, use fallback from exam.gradingCriteria
         if (!data || data.length === 0) {
-          console.log('Using fallback criteria from exam.gradingCriteria');
-          setCriteriaList(exam.gradingCriteria || []);
+          console.log('No criteria from API, using fallback');
+          const fallbackCriteria = exam.gradingCriteria || [];
+          if (fallbackCriteria.length === 0) {
+            setCriteriaError('Chưa có tiêu chí chấm điểm. Vui lòng liên hệ admin để upload file tiêu chí.');
+          }
+          setCriteriaList(fallbackCriteria);
         } else {
+          // Successfully got criteria from backend
           setCriteriaList(data);
+          setCriteriaError(null);
         }
       } catch (error) {
         console.error('Error fetching criteria:', error);
         // On error, show error message AND use fallback criteria from exam
-        console.log('Error occurred, using fallback criteria');
-        // setCriteriaError('Không thể tải danh sách tiêu chí từ server. Đang hiển thị dữ liệu mẫu.');
-        setCriteriaList(exam.gradingCriteria || []);
+        const fallbackCriteria = exam.gradingCriteria || [];
+        if (fallbackCriteria.length > 0) {
+          setCriteriaError('Không thể tải tiêu chí từ server. Đang hiển thị dữ liệu dự phòng.');
+          setCriteriaList(fallbackCriteria);
+        } else {
+          setCriteriaError('Không thể tải danh sách tiêu chí. Vui lòng thử lại sau.');
+          setCriteriaList([]);
+        }
       } finally {
         setIsLoadingCriteria(false);
       }
@@ -230,19 +524,45 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     setSimilarityScore(null);
   };
 
-  if (!exam) {
-    return <div>Exam not found</div>;
+  // Show loading state while fetching exam
+  if (isLoadingExam) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <div className="spinner"></div>
+      </div>
+    );
   }
 
-  // Get subject info
-  const subject = subjects.find(s => s.id === exam.subjectId);
+  // Show error if exam fetch failed
+  if (examError) {
+    return (
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        <p style={{ color: 'red' }}>{examError}</p>
+        <button onClick={() => navigate('/teacher')} style={{ marginTop: '10px', padding: '8px 16px', cursor: 'pointer' }}>
+          Quay lại Dashboard
+        </button>
+      </div>
+    );
+  }
 
-  const handleSelectStudent = (student) => {
-    setSelectedStudent(student);
-    setScores({});
-    setNotes({});
-    setAddedCriteria({}); // Reset added criteria when switching students
-    setGradeIds({}); // Reset grade IDs when switching students
+  // Show not found if exam doesn't exist
+  if (!exam) {
+    return (
+      <div style={{ padding: '20px', textAlign: 'center' }}>
+        <p>Không tìm thấy bài thi</p>
+        <button onClick={() => navigate('/teacher')} style={{ marginTop: '10px', padding: '8px 16px', cursor: 'pointer' }}>
+          Quay lại Dashboard
+        </button>
+      </div>
+    );
+  }
+
+  const handleSelectStudent = async (student) => {
+    // Navigate to submission detail URL
+    navigate(`/grading/${examId}/submission/${student.id}`);
+    
+    // Load submission detail
+    await loadSubmissionDetail(student);
   };
 
   const handleAddCriteria = async (criteriaId) => {
@@ -252,8 +572,8 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       return;
     }
     
-    if (!selectedStudent) {
-      alert('Vui lòng chọn sinh viên trước!');
+    if (!selectedStudent || !submissionDetail) {
+      alert('Vui lòng chọn sinh viên và đợi tải thông tin bài nộp!');
       return;
     }
 
@@ -261,8 +581,8 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     setGradeError(null);
 
     try {
-      // Use submissionId from student object, fallback to student.id if not available
-      const submissionId = selectedStudent.submissionId || selectedStudent.id;
+      // Use submissionId from submission detail
+      const submissionId = submissionDetail.submissionId;
       
       // Call API to create grade
       const gradeData = {
@@ -274,11 +594,20 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       
       const response = await gradeService.createGrade(gradeData);
       
-      // Store the grade ID for future updates
-      setGradeIds({ ...gradeIds, [criteriaId]: response.gradeId });
-      setAddedCriteria({ ...addedCriteria, [criteriaId]: true });
+      // Store the grade ID and mark as added
+      const updatedGradeIds = { ...gradeIds, [criteriaId]: response.gradeId };
+      const updatedAddedCriteria = { ...addedCriteria, [criteriaId]: true };
+      const updatedScores = { ...scores, [criteriaId]: parseFloat(score) };
+      
+      setGradeIds(updatedGradeIds);
+      setAddedCriteria(updatedAddedCriteria);
+      setScores(updatedScores);
       
       console.log('Grade created successfully:', response);
+      console.log('Updated scores:', updatedScores);
+      console.log('Current total score should be:', Object.keys(updatedAddedCriteria)
+        .filter(key => updatedAddedCriteria[key])
+        .reduce((sum, key) => sum + (updatedScores[key] || 0), 0));
     } catch (error) {
       console.error('Error creating grade:', error);
       setGradeError(`Không thể lưu điểm cho tiêu chí này. Vui lòng thử lại.`);
@@ -289,10 +618,9 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   };
 
   const handleEditCriteria = (criteriaId) => {
-    // Unlock the fields for editing by removing from addedCriteria
-    const updatedAdded = { ...addedCriteria };
-    delete updatedAdded[criteriaId];
-    setAddedCriteria(updatedAdded);
+    // Unlock the fields for editing by setting to false (not deleting)
+    // This allows user to edit without removing from total score calculation
+    setAddedCriteria({ ...addedCriteria, [criteriaId]: false });
   };
 
   const handleUpdateCriteria = async (criteriaId) => {
@@ -321,10 +649,15 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       
       await gradeService.updateGrade(gradeId, gradeData);
       
-      // Mark as added again after successful update
-      setAddedCriteria({ ...addedCriteria, [criteriaId]: true });
+      // Update local state after successful update
+      const updatedScores = { ...scores, [criteriaId]: parseFloat(score) };
+      const updatedAddedCriteria = { ...addedCriteria, [criteriaId]: true };
+      
+      setScores(updatedScores);
+      setAddedCriteria(updatedAddedCriteria);
       
       console.log('Grade updated successfully');
+      console.log('Updated scores:', updatedScores);
       alert('Cập nhật điểm thành công!');
     } catch (error) {
       console.error('Error updating grade:', error);
@@ -339,10 +672,22 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     const criteria = activeCriteria.find(c => c.id === criteriaId);
     if (!criteria) return;
     
+    // Allow empty string (user is typing)
+    if (value === '' || value === null || value === undefined) {
+      setScores({ ...scores, [criteriaId]: '' });
+      return;
+    }
+    
+    // Parse and validate number
     const numValue = parseFloat(value);
     
-    if (numValue <= criteria.maxScore && numValue >= 0) {
-      setScores({ ...scores, [criteriaId]: numValue });
+    // Allow valid numbers including 0, and check if it's a multiple of 0.25
+    if (!isNaN(numValue) && numValue >= 0 && numValue <= criteria.maxScore) {
+      // Check if the value is a multiple of 0.25 (step size)
+      const remainder = (numValue * 100) % 25; // Multiply by 100 to avoid floating point issues
+      if (remainder === 0) {
+        setScores({ ...scores, [criteriaId]: numValue });
+      }
     }
   };
 
@@ -386,49 +731,137 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     setViolationForm({ ...violationForm, [field]: value });
   };
 
-  const handleAddViolation = () => {
+  const handleAddViolation = async () => {
     if (!violationForm.description.trim()) {
       alert('Vui lòng nhập mô tả vi phạm!');
       return;
     }
 
-    const newViolation = {
-      id: Date.now(),
-      ...violationForm,
-      penalty: getPenaltyByType(violationForm.type)
-    };
+    if (!submissionDetail) {
+      alert('Vui lòng đợi tải thông tin bài nộp!');
+      return;
+    }
 
-    setViolations([...violations, newViolation]);
-    handleCloseViolationForm();
+    setIsLoadingViolation(true);
+    setViolationError(null);
+
+    try {
+      console.log('Creating violation with submissionDetail:', submissionDetail);
+      console.log('SubmissionId:', submissionDetail?.submissionId);
+      console.log('ViolationForm:', violationForm);
+      
+      if (!submissionDetail?.submissionId) {
+        alert('Lỗi: Không tìm thấy submissionId. Vui lòng chọn lại submission.');
+        return;
+      }
+      
+      const violationData = {
+        submissionId: submissionDetail.submissionId,
+        type: violationForm.type,
+        description: violationForm.description,
+        severity: violationForm.severity,
+        penalty: getPenaltyByType(violationForm.type),
+        detectedBy_UserID: user.id // Add current user ID
+      };
+      
+      console.log('Sending violation data:', violationData);
+      console.log('Request will be sent to:', '/api/v1/violation');
+
+      const newViolation = await violationService.createViolation(violationData);
+      
+      // Add to local state
+      setViolations([...violations, newViolation]);
+      handleCloseViolationForm();
+      
+      console.log('Violation created successfully:', newViolation);
+    } catch (error) {
+      console.error('Error creating violation:', error);
+      setViolationError('Không thể tạo vi phạm. Vui lòng thử lại.');
+      alert('Không thể tạo vi phạm. Vui lòng thử lại!');
+    } finally {
+      setIsLoadingViolation(false);
+    }
   };
 
   const handleEditViolation = (violation) => {
+    console.log('Editing violation:', violation);
     setEditingViolation(violation.id);
     setViolationForm({
-      type: violation.type,
-      description: violation.description,
-      severity: violation.severity
+      type: violation.type || 'Keyword', // Fallback to default
+      description: violation.description || '',
+      severity: violation.severity || 'Warning'
     });
     setShowViolationForm(true);
+    console.log('Form set to:', {
+      type: violation.type || 'Keyword',
+      description: violation.description || '',
+      severity: violation.severity || 'Warning'
+    });
   };
 
-  const handleUpdateViolation = () => {
+  const handleUpdateViolation = async () => {
     if (!violationForm.description.trim()) {
       alert('Vui lòng nhập mô tả vi phạm!');
       return;
     }
 
-    setViolations(violations.map(v => 
-      v.id === editingViolation 
-        ? { ...v, ...violationForm, penalty: getPenaltyByType(violationForm.type) }
-        : v
-    ));
-    handleCloseViolationForm();
+    setIsLoadingViolation(true);
+    setViolationError(null);
+
+    try {
+      console.log('Updating violation, form data:', violationForm);
+      
+      const violationData = {
+        submissionId: submissionDetail.submissionId, // Add SubmissionId from current submission
+        type: violationForm.type,
+        description: violationForm.description,
+        severity: violationForm.severity,
+        penalty: getPenaltyByType(violationForm.type),
+        detectedBy_UserID: user.id, // Add current user ID
+        resolved: false // Default to not resolved
+      };
+      
+      console.log('Sending violation data:', violationData);
+
+      const updatedViolation = await violationService.updateViolation(editingViolation, violationData);
+      
+      // Update local state
+      setViolations(violations.map(v => 
+        v.id === editingViolation ? updatedViolation : v
+      ));
+      handleCloseViolationForm();
+      
+      console.log('Violation updated successfully:', updatedViolation);
+    } catch (error) {
+      console.error('Error updating violation:', error);
+      setViolationError('Không thể cập nhật vi phạm. Vui lòng thử lại.');
+      alert('Không thể cập nhật vi phạm. Vui lòng thử lại!');
+    } finally {
+      setIsLoadingViolation(false);
+    }
   };
 
-  const handleDeleteViolation = (violationId) => {
-    if (window.confirm('Bạn có chắc muốn xóa vi phạm này?')) {
+  const handleDeleteViolation = async (violationId) => {
+    if (!window.confirm('Bạn có chắc muốn xóa vi phạm này?')) {
+      return;
+    }
+
+    setIsLoadingViolation(true);
+    setViolationError(null);
+
+    try {
+      await violationService.deleteViolation(violationId);
+      
+      // Remove from local state
       setViolations(violations.filter(v => v.id !== violationId));
+      
+      console.log('Violation deleted successfully');
+    } catch (error) {
+      console.error('Error deleting violation:', error);
+      setViolationError('Không thể xóa vi phạm. Vui lòng thử lại.');
+      alert('Không thể xóa vi phạm. Vui lòng thử lại!');
+    } finally {
+      setIsLoadingViolation(false);
     }
   };
 
@@ -436,54 +869,22 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     return violations.reduce((sum, v) => sum + v.penalty, 0);
   };
 
-  const handleAddViolationList = async () => {
-    if (violations.length === 0) {
-      alert('Chưa có vi phạm nào để thêm!');
-      return;
-    }
-    
-    if (!selectedStudent) {
-      alert('Vui lòng chọn sinh viên trước!');
-      return;
-    }
-
-    const submissionId = selectedStudent.submissionId || selectedStudent.id;
-    const totalPenalty = getTotalPenalty();
-    
-    // TODO: Call API to add all violations to database
-    // Example API call structure:
-    // const violationData = {
-    //   submissionId: submissionId,
-    //   violations: violations.map(v => ({
-    //     type: v.type,
-    //     description: v.description,
-    //     severity: v.severity,
-    //     penalty: v.penalty
-    //   }))
-    // };
-    // await violationService.addViolationList(violationData);
-    
-    console.log('Ready to add violations for submissionId:', submissionId);
-    console.log('Violations to add:', violations);
-    console.log('Total penalty:', totalPenalty.toFixed(1));
-    
-    alert(`Sẽ thêm ${violations.length} vi phạm với tổng điểm trừ: ${totalPenalty.toFixed(1)} điểm (Chờ API)`);
-  };
-
   const calculateTotalScore = () => {
-    // Only calculate score for criteria that have been added
+    // Calculate score for criteria that have been saved to DB (have gradeId)
     let baseScore = 0;
     activeCriteria.forEach(criteria => {
-      if (addedCriteria[criteria.id] && scores[criteria.id] !== undefined) {
-        baseScore += scores[criteria.id];
+      // Count criteria that have gradeId (saved to DB) OR have been added but not yet updated
+      if (gradeIds[criteria.id] && scores[criteria.id] !== undefined) {
+        baseScore += parseFloat(scores[criteria.id]);
       }
     });
     
     const penalty = getTotalPenalty();
+    console.log('[calculateTotalScore] Base score:', baseScore, 'Penalty:', penalty);
     return Math.max(0, baseScore - penalty);
   };
 
-  const handleSubmitGrade = () => {
+  const handleSubmitGrade = async () => {
     if (!selectedStudent) {
       alert('Vui lòng chọn sinh viên để chấm điểm!');
       return;
@@ -496,62 +897,91 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       return;
     }
 
-    const gradingResult = {
-      studentId: selectedStudent.studentId,
-      studentName: selectedStudent.studentName,
-      subject: subject?.code || 'N/A',
-      semester: exam.semester,
-      examType: exam.type,
-      password: selectedStudent.password,
-      scores: { ...scores },
-      notes: { ...notes },
-      totalScore: calculateTotalScore(),
-      gradedAt: new Date().toLocaleString('vi-VN'),
-      gradedBy: user.name,
-    };
+    try {
+      setIsLoadingGrade(true);
+      
+      // Prepare update data
+      const updateData = {
+        ExamId: submissionDetail?.examId || exam?.id,
+        StudentId: submissionDetail?.studentId || selectedStudent?.studentId
+      };
+      
+      // Call backend to update submission - backend will calculate TotalScore and GradingStatus automatically
+      await submissionService.updateSubmission(selectedStudent.id, updateData);
 
-    setGradedSubmissions([...gradedSubmissions, gradingResult]);
-    
-    // Update student as graded in the exams state
-    setExams(exams.map(e => {
-      if (e.id === exam.id) {
-        return {
-          ...e,
-          students: e.students.map(s => 
-            s.id === selectedStudent.id 
-              ? { ...s, graded: true, totalScore: calculateTotalScore() }
-              : s
-          )
-        };
-      }
-      return e;
-    }));
-    
-    setShowSuccess(true);
-    
-    setTimeout(() => {
-      setShowSuccess(false);
-      setSelectedStudent(null);
-      setScores({});
-      setNotes({});
-    }, 2000);
+      const gradingResult = {
+        studentId: selectedStudent.studentId,
+        studentName: selectedStudent.studentName,
+        subject: subject?.code || 'N/A',
+        semester: exam.semester,
+        examType: exam.type,
+        password: selectedStudent.password,
+        scores: { ...scores },
+        notes: { ...notes },
+        totalScore: calculateTotalScore(),
+        gradedAt: new Date().toLocaleString('vi-VN'),
+        gradedBy: user.name,
+      };
+
+      setGradedSubmissions([...gradedSubmissions, gradingResult]);
+      
+      // Update submissions state to reflect graded status immediately
+      const finalScore = calculateTotalScore();
+      setSubmissions(submissions.map(s => 
+        s.id === selectedStudent.id 
+          ? { 
+              ...s, 
+              graded: true, 
+              totalScore: finalScore,
+              gradingStatus: finalScore > 0 ? 'Passed' : 'Failed'
+            }
+          : s
+      ));
+      
+      // Update student as graded in the exams state
+      setExams(exams.map(e => {
+        if (e.id === exam.id) {
+          return {
+            ...e,
+            students: e.students.map(s => 
+              s.id === selectedStudent.id 
+                ? { ...s, graded: true, totalScore: finalScore }
+                : s
+            )
+          };
+        }
+        return e;
+      }));
+      
+      setShowSuccess(true);
+      
+      setTimeout(() => {
+        setShowSuccess(false);
+        setSelectedStudent(null);
+        setScores({});
+        setNotes({});
+      }, 2000);
+    } catch (error) {
+      console.error('Error completing grading:', error);
+      alert('Có lỗi xảy ra khi hoàn thành chấm bài. Vui lòng thử lại!');
+    } finally {
+      setIsLoadingGrade(false);
+    }
   };
 
   const handlePreviousFile = () => {
-    const currentIndex = exam.students?.findIndex(s => s.id === selectedStudent?.id) || 0;
+    const currentIndex = submissions.findIndex(s => s.id === selectedStudent?.id) || 0;
     if (currentIndex > 0) {
-      setSelectedStudent(exam.students[currentIndex - 1]);
-      setScores({});
-      setNotes({});
+      const prevStudent = submissions[currentIndex - 1];
+      handleSelectStudent(prevStudent);
     }
   };
 
   const handleNextFile = () => {
-    const currentIndex = exam.students?.findIndex(s => s.id === selectedStudent?.id) || 0;
-    if (currentIndex < (exam.students?.length || 0) - 1) {
-      setSelectedStudent(exam.students[currentIndex + 1]);
-      setScores({});
-      setNotes({});
+    const currentIndex = submissions.findIndex(s => s.id === selectedStudent?.id) || 0;
+    if (currentIndex < submissions.length - 1) {
+      const nextStudent = submissions[currentIndex + 1];
+      handleSelectStudent(nextStudent);
     }
   };
 
@@ -562,13 +992,23 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   return (
     <div className="grading-page">
       <div className="grading-header">
-        <button onClick={() => navigate('/teacher')} className="btn btn-secondary">
+        <button 
+          onClick={() => {
+              navigate('/teacher');           
+          }} 
+          className="btn btn-secondary"
+        >
           <ArrowLeft size={18} />
           Quay lại
         </button>
         <div className="header-info">
-          <h1>{subject?.code || 'N/A'} - {exam.semester} ({exam.type})</h1>
-          <p>{subject?.name || 'N/A'}</p>
+          <h1>
+            {exam?.subject?.subjectCode || subject?.code || 'N/A'} - {exam?.subject?.subjectName || subject?.name || ''}
+          </h1>
+          <p>
+            {exam?.examName || exam?.semester || 'N/A'} ({exam?.examType || exam?.type || 'N/A'})
+            {exam?.semester?.semesterName && ` - ${exam.semester.semesterName}`}
+          </p>
         </div>
       </div>
 
@@ -577,20 +1017,30 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
         {!selectedStudent ? (
           <div className="student-list-section">
             <div className="section-header">
-              <h2>Danh sách sinh viên ({exam.students?.length || 0})</h2>
+              <h2>Danh sách sinh viên ({submissions.length})</h2>
               <div className="grading-stats">
                 <span className="stat-badge graded">
-                  Đã chấm: {exam.students?.filter(s => s.graded).length || 0}
+                  Đã chấm: {submissions.filter(s => s.graded).length}
                 </span>
                 <span className="stat-badge pending">
-                  Chưa chấm: {exam.students?.filter(s => !s.graded).length || 0}
+                  Chưa chấm: {submissions.filter(s => !s.graded).length}
                 </span>
               </div>
             </div>
             
-            {exam.students && exam.students.length > 0 ? (
+            {isLoadingSubmissions ? (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <div className="loading-spinner"></div>
+                <p>Đang tải danh sách bài nộp...</p>
+              </div>
+            ) : submissionsError ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#e53e3e' }}>
+                <AlertCircle size={24} style={{ margin: '0 auto 10px' }} />
+                <p>{submissionsError}</p>
+              </div>
+            ) : submissions.length > 0 ? (
               <div className="student-grid">
-                {exam.students.map((student) => (
+                {submissions.map((student) => (
                   <div 
                     key={student.id} 
                     className={`student-card ${student.graded ? 'graded' : ''}`}
@@ -603,9 +1053,9 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                       )}
                     </div>
                     <div className="student-card-body">
-                      <h3>{student.studentName}</h3>
-                      <p className="student-id">{student.studentId}</p>
-                      <p className="student-file">{student.fileName}</p>
+                      <h3>{student.student?.fullName || student.studentName || student.studentId}</h3>
+                      <p className="student-id">MSSV: {student.student?.studentId || student.studentId}</p>
+                      <p className="student-file">{student.originalFileName || student.fileName}</p>
                       {student.graded && (
                         <div className="student-score">
                           Điểm: <strong>{student.totalScore?.toFixed(1)}/{totalMaxScore}</strong>
@@ -639,7 +1089,11 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                     <h3>Thông tin sinh viên</h3>
                   </div>
                   <button 
-                    onClick={() => setSelectedStudent(null)}
+                    onClick={() => {
+                      setSelectedStudent(null);
+                      setSubmissionDetail(null);
+                      navigate(`/grading/${examId}`, { replace: true });
+                    }}
                     className="btn btn-secondary btn-sm"
                   >
                     <ArrowLeft size={16} />
@@ -649,32 +1103,84 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                 <div className="student-details">
                   <div className="detail-row">
                     <span className="detail-label">Tên sinh viên:</span>
-                    <span className="detail-value">{selectedStudent.studentName}</span>
+                    <span className="detail-value">
+                      {submissionDetail?.student?.fullName || selectedStudent.studentName}
+                    </span>
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">MSSV:</span>
-                    <span className="detail-value">{selectedStudent.studentId}</span>
+                    <span className="detail-value">
+                      {submissionDetail?.student?.studentId || selectedStudent.studentId}
+                    </span>
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Môn thi:</span>
-                    <span className="detail-value">{subject?.code || 'N/A'}</span>
+                    <span className="detail-value">
+                      {submissionDetail?.exam?.subject?.subjectCode || subject?.code || 'N/A'} - {submissionDetail?.exam?.subject?.subjectName || subject?.name || ''}
+                    </span>
                   </div>
                   <div className="detail-row">
-                    <span className="detail-label">Kỳ thi:</span>
-                    <span className="detail-value">{exam.semester}</span>
+                    <span className="detail-label">Tên kỳ thi:</span>
+                    <span className="detail-value">
+                      {submissionDetail?.exam?.examName || exam.semester}
+                    </span>
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">Loại thi:</span>
-                    <span className="detail-value">{exam.type}</span>
+                    <span className="detail-value">
+                      {submissionDetail?.exam?.examType || exam.type}
+                    </span>
                   </div>
                   <div className="detail-row">
-                    <span className="detail-label">Slot:</span>
-                    <span className="detail-value">{exam.slot}</span>
+                    <span className="detail-label">Kỳ học:</span>
+                    <span className="detail-value">
+                      {submissionDetail?.exam?.semester?.semesterCode || exam.semester} 
+                      {submissionDetail?.exam?.semester?.semesterName && ` - ${submissionDetail.exam.semester.semesterName}`}
+                    </span>
                   </div>
                   <div className="detail-row">
                     <span className="detail-label">File:</span>
-                    <span className="detail-value file-name">{selectedStudent.fileName}</span>
+                    <span className="detail-value file-name">
+                      {submissionDetail?.originalFileName || selectedStudent.fileName}
+                    </span>
                   </div>
+                  {submissionDetail && (
+                    <>
+                      <div className="detail-row">
+                        <span className="detail-label">Thời gian nộp:</span>
+                        <span className="detail-value">
+                          {new Date(submissionDetail.uploadedAt).toLocaleString('vi-VN')}
+                        </span>
+                      </div>
+                      <div className="detail-row">
+                        <span className="detail-label">Trạng thái chấm:</span>
+                        <span className="detail-value">
+                          <span className={`status-badge ${submissionDetail.gradingStatus.toLowerCase()}`}>
+                            {submissionDetail.gradingStatus}
+                          </span>
+                        </span>
+                      </div>
+                      {submissionDetail.totalScore !== null && (
+                        <div className="detail-row">
+                          <span className="detail-label">Tổng điểm:</span>
+                          <span className="detail-value">
+                            <strong style={{ fontSize: '18px', color: submissionDetail.totalScore >= 5 ? '#38a169' : '#e53e3e' }}>
+                              {submissionDetail.totalScore.toFixed(1)}
+                            </strong>
+                          </span>
+                        </div>
+                      )}
+                      {submissionDetail.isApproved && (
+                        <div className="detail-row">
+                          <span className="detail-label">Phê duyệt:</span>
+                          <span className="detail-value">
+                            <CheckCircle size={16} style={{ color: '#38a169', marginRight: '4px' }} />
+                            Đã phê duyệt
+                          </span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -682,18 +1188,18 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
               <div className="file-navigation">
                 <button
                   onClick={handlePreviousFile}
-                  disabled={(exam.students?.findIndex(s => s.id === selectedStudent.id) || 0) === 0}
+                  disabled={(submissions.findIndex(s => s.id === selectedStudent.id) || 0) === 0}
                   className="btn btn-secondary"
                 >
                   <ChevronLeft size={18} />
                   Sinh viên trước
                 </button>
                 <span className="file-counter">
-                  {(exam.students?.findIndex(s => s.id === selectedStudent.id) || 0) + 1} / {exam.students?.length || 0}
+                  {(submissions.findIndex(s => s.id === selectedStudent.id) || 0) + 1} / {submissions.length}
                 </span>
                 <button
                   onClick={handleNextFile}
-                  disabled={(exam.students?.findIndex(s => s.id === selectedStudent.id) || 0) === (exam.students?.length || 0) - 1}
+                  disabled={(submissions.findIndex(s => s.id === selectedStudent.id) || 0) === submissions.length - 1}
                   className="btn btn-secondary"
                 >
                   Sinh viên sau
@@ -710,8 +1216,29 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                 <div className="card-header">
                   <FileText size={24} />
                   <h3>Bài làm sinh viên</h3>
+                  {submissionDetail && (
+                    <div style={{ fontSize: '12px', color: '#666', marginLeft: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+                      {/* {submissionDetail.totalScore && (
+                        <div>Tổng điểm: <strong>{submissionDetail.totalScore.toFixed(1)}</strong></div>
+                      )} */}
+                      <a 
+                        href={submissionDetail.filePath} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="btn btn-sm btn-secondary"
+                        style={{ fontSize: '11px', padding: '4px 12px' }}
+                      >
+                        📥 Tải file gốc
+                      </a>
+                    </div>
+                  )}
                 </div>
-                {isLoadingDocument ? (
+                {isLoadingSubmissionDetail ? (
+                  <div className="document-placeholder">
+                    <div className="loading-spinner"></div>
+                    <p>Đang tải thông tin bài nộp...</p>
+                  </div>
+                ) : isLoadingDocument ? (
                   <div className="document-placeholder">
                     <div className="loading-spinner"></div>
                     <p>Đang tải nội dung file...</p>
@@ -748,7 +1275,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   <div className="total-score">
                     <span>Tổng điểm:</span>
                     <span className="score-display">
-                      {calculateTotalScore().toFixed(1)} / {totalMaxScore}
+                      {calculateTotalScore()} / {totalMaxScore}
                     </span>
                   </div>
                 </div>
@@ -825,8 +1352,8 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                             type="number"
                             min="0"
                             max={criteria.maxScore}
-                            step="0.5"
-                            value={scores[criteria.id] || ''}
+                            step="0.25"
+                            value={scores[criteria.id] !== undefined && scores[criteria.id] !== null ? scores[criteria.id] : ''}
                             onChange={(e) => handleScoreChange(criteria.id, e.target.value)}
                             placeholder={`0 - ${criteria.maxScore}`}
                             disabled={addedCriteria[criteria.id]}
@@ -855,12 +1382,12 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   disabled={loadingCriteriaId !== null}
                 >
                   <Save size={20} />
-                  Lưu điểm
+                  Hoàn thành chấm bài
                 </button>
               </div>
 
               {/* Graded Submissions */}
-              {gradedSubmissions.length > 0 && (
+              {/* {gradedSubmissions.length > 0 && (
                 <div className="card graded-list">
                   <div className="card-header">
                     <h3>Đã chấm ({gradedSubmissions.length})</h3>
@@ -879,7 +1406,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                     ))}
                   </div>
                 </div>
-              )}
+              )} */}
             </div>
             </div>
 
@@ -921,29 +1448,26 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                             <button 
                               onClick={() => handleEditViolation(violation)}
                               className="btn-violation-action btn-edit-small"
+                              disabled={isLoadingViolation}
                             >
                               Edit
                             </button>
                             <button 
                               onClick={() => handleDeleteViolation(violation.id)}
                               className="btn-violation-action btn-delete-small"
+                              disabled={isLoadingViolation}
                             >
-                              Delete
+                              {isLoadingViolation ? 'Đang xóa...' : 'Delete'}
                             </button>
                           </div>
                         </div>
                       </div>
                     ))}
-                    <div className="violation-total-action">
-                      <button 
-                        onClick={handleAddViolationList}
-                        className="btn btn-warning"
-                        style={{width: 'max-content', marginTop: '16px'}}
-                      >
-                        <Save size={18} />
-                        Lưu vi phạm ({violations.length} vi phạm, -{getTotalPenalty().toFixed(1)} điểm)
-                      </button>
-                    </div>
+                    {violations.length > 0 && (
+                      <div className="violation-summary" style={{ marginTop: '16px', padding: '12px', background: '#fff3cd', borderRadius: '8px' }}>
+                        <strong>Tổng cộng:</strong> {violations.length} vi phạm, Tổng điểm trừ: <strong style={{ color: '#e53e3e' }}>-{getTotalPenalty()} điểm</strong>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="no-violations">
@@ -1096,16 +1620,36 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
               </div>
             </div>
 
+            {violationError && (
+              <div style={{ padding: '12px', background: '#fee', color: '#c00', borderRadius: '6px', marginTop: '16px' }}>
+                {violationError}
+              </div>
+            )}
+
             <div className="modal-footer">
-              <button onClick={handleCloseViolationForm} className="btn btn-secondary">
+              <button 
+                onClick={handleCloseViolationForm} 
+                className="btn btn-secondary"
+                disabled={isLoadingViolation}
+              >
                 Hủy
               </button>
               <button 
                 onClick={editingViolation ? handleUpdateViolation : handleAddViolation}
                 className="btn btn-warning"
+                disabled={isLoadingViolation}
               >
-                <Save size={18} />
-                {editingViolation ? 'Cập nhật' : 'Thêm vi phạm'}
+                {isLoadingViolation ? (
+                  <>
+                    <div className="spinner-small" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
+                    Đang xử lý...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    {editingViolation ? 'Cập nhật' : 'Thêm vi phạm'}
+                  </>
+                )}
               </button>
             </div>
           </div>
