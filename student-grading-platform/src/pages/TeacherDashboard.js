@@ -99,6 +99,11 @@ function TeacherDashboard({ user, onLogout }) {
     };
 
     fetchSubmissionsForExams();
+    
+    // Refetch every 10 seconds to get latest grading status
+    const interval = setInterval(fetchSubmissionsForExams, 10000);
+    
+    return () => clearInterval(interval);
   }, [exams, user.id]);
 
   // All exams are assigned to the logged-in teacher (examinerId)
@@ -255,6 +260,14 @@ function TeacherDashboard({ user, onLogout }) {
               const examSubmissions = submissions[exam.id] || [];
               const submittedStudents = examSubmissions.length;
               const gradedStudents = examSubmissions.filter(s => s.gradingStatus === 'Passed' || s.gradingStatus === 'Failed').length;
+              
+              // Calculate average score for graded submissions
+              const gradedScores = examSubmissions
+                .filter(s => s.totalScore !== null && s.totalScore !== undefined && (s.gradingStatus === 'Passed' || s.gradingStatus === 'Failed'))
+                .map(s => s.totalScore);
+              const averageScore = gradedScores.length > 0 
+                ? (gradedScores.reduce((sum, score) => sum + score, 0) / gradedScores.length).toFixed(2)
+                : 'N/A';
             
               return (
                 <div key={exam.id} className="exam-card">
@@ -282,6 +295,12 @@ function TeacherDashboard({ user, onLogout }) {
                     <div className="stat-item">
                       <span className="stat-label">Đã chấm:</span>
                       <span className="stat-value">{gradedStudents} bài</span>
+                    </div>
+                    <div className="stat-item">
+                      <span className="stat-label">Điểm TB:</span>
+                      <span className="stat-value" style={{ color: averageScore !== 'N/A' ? '#4CAF50' : '#999', fontWeight: 'bold' }}>
+                        {averageScore !== 'N/A' ? `${averageScore} điểm` : 'Chưa có'}
+                      </span>
                     </div>
                   </div>
 

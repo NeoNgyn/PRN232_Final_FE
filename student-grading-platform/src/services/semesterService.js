@@ -6,8 +6,10 @@ const semesterService = {
   getAllSemesters: async () => {
     try {
       const response = await academicAxios.get(API_ENDPOINTS.SEMESTERS.GET_ALL);
+      
       // Map API response to UI format
-      return (response.data.data || []).map(semester => ({
+      const semestersData = response.data.data || [];
+      return semestersData.map(semester => ({
         id: semester.semesterId,
         code: semester.semesterCode,
         name: semester.semesterName || ''

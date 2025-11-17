@@ -8,9 +8,24 @@ const managerService = {
   getAllTeachers: async () => {
     try {
       const response = await identityAxios.get(API_ENDPOINTS.USERS.GET_TEACHERS);
+      console.log('Raw teachers response:', response.data);
+      
       // Backend returns { success, message, data }
       if (response.data && response.data.data) {
-        return response.data.data;
+        const teachers = response.data.data;
+        
+        // Map UserResponse to UI format (UserId -> id, Name -> name/fullName)
+        return teachers.map(teacher => ({
+          id: teacher.UserId || teacher.userId,
+          userId: teacher.UserId || teacher.userId,
+          name: teacher.Name || teacher.name || teacher.Email || teacher.email,
+          fullName: teacher.Name || teacher.name || teacher.Email || teacher.email,
+          email: teacher.Email || teacher.email,
+          lecturerCode: teacher.LecturerCode || teacher.lecturerCode || 'N/A',
+          roleId: teacher.RoleId || teacher.roleId,
+          isActive: teacher.IsActive ?? teacher.isActive,
+          _original: teacher
+        }));
       }
       return [];
     } catch (error) {

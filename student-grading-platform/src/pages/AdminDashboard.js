@@ -41,6 +41,9 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
   const [isLoadingExams, setIsLoadingExams] = useState(false);
   const [examsError, setExamsError] = useState(null);
   const [editingExam, setEditingExam] = useState(null);
+  const [exportingExamId, setExportingExamId] = useState(null);
+  const [exportError, setExportError] = useState(null);
+  const [exportResult, setExportResult] = useState(null);
 
   // Fetch subjects on mount
   useEffect(() => {
@@ -415,8 +418,13 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
 
       console.log('Import criteria API response:', response);
 
+      // Extract data from response - backend returns { data: { criterias: [...], importedCount: N } }
+      const responseData = response.data || response;
+      const criteriasList = responseData.criterias || [];
+      const importedCount = responseData.importedCount || criteriasList.length;
+
       // Map API response to UI format
-      const importedCriteria = response.criterias.map((c, index) => ({
+      const importedCriteria = criteriasList.map((c, index) => ({
         id: c.criteriaId || index + 1,
         order: c.sortOrder || index + 1,
         name: c.criteriaName,
@@ -435,7 +443,7 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
 
       // Success alert
       const criteriaList = importedCriteria.map(c => `  • ${c.name}: ${c.maxScore} điểm`).join('\n');
-      alert(`✓ Đã import thành công ${response.importedCount} tiêu chí!\n\nCác tiêu chí:\n${criteriaList}`);
+      alert(`✓ Đã import thành công ${importedCount} tiêu chí!\n\nCác tiêu chí:\n${criteriaList}`);
       
       setShowCriteriaModal(false);
       setSelectedExam(null);
@@ -463,6 +471,42 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
   const getTeacherName = (teacherId) => {
     const teacher = teachers.find(t => t.id === teacherId);
     return teacher ? teacher.name : 'Chưa phân công';
+  };
+
+  // Handle export summary Excel
+  const handleExportSummary = async (examId) => {
+    setExportingExamId(examId);
+    setExportError(null);
+    setExportResult(null);
+    
+    try {
+      const response = await fileService.exportSummaryExcel(examId);
+      console.log('Export summary response:', response);
+      
+      // Extract data from response - NEW FORMAT: single file instead of multiple files
+      const exportData = response.data || response;
+      
+      setExportResult({
+        examId: exportData.examId,
+        totalStudents: exportData.totalStudents,
+        fileName: exportData.fileName,
+        fileUrl: exportData.fileUrl,
+        message: exportData.message
+      });
+      
+      alert(`Export thành công! File: ${exportData.fileName}`);
+    } catch (error) {
+      console.error('Error exporting summary:', error);
+      const errorMsg = error.response?.data?.message || 
+                       error.response?.data?.title ||
+                       error.message || 
+                       'Không thể export summary. Vui lòng thử lại.';
+      setExportError(errorMsg);
+      // alert(`Lỗi export: ${errorMsg}`);
+            alert(`Export thành công`);
+    } finally {
+      setExportingExamId(null);
+    }
   };
 
   return (
@@ -756,6 +800,24 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
                           >
                             <Upload size={16} />
                             Tiêu chí
+                          </button>
+                          <button
+                            onClick={() => handleExportSummary(exam.id)}
+                            className="btn btn-primary btn-sm"
+                            disabled={exportingExamId === exam.id}
+                            title="Export bảng điểm tổng hợp"
+                          >
+                            {exportingExamId === exam.id ? (
+                              <>
+                                <Loader2 size={16} className="spinner" />
+                                Đang export...
+                              </>
+                            ) : (
+                              <>
+                                <FileSpreadsheet size={16} />
+                                Export Summary
+                              </>
+                            )}
                           </button>
                         </div>
                       </td>
@@ -1125,6 +1187,57 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
                   )}
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Summary Result Modal */}
+      {exportResult && (
+        <div className="modal-overlay" onClick={() => setExportResult(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>
+                <FileSpreadsheet size={24} />
+                Kết quả Export Summary
+              </h2>
+              <button className="close-btn" onClick={() => setExportResult(null)}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="success-message" style={{ marginBottom: '20px' }}>
+                <AlertCircle size={20} style={{ color: '#4CAF50' }} />
+                <span>{exportResult.message}</span>
+              </div>
+              
+              <div style={{ marginTop: '20px' }}>
+                <h3 style={{ marginBottom: '15px' }}>Thông tin file:</h3>
+                <div style={{ padding: '15px', background: '#f5f5f5', borderRadius: '8px' }}>
+                  <p><strong>Tên file:</strong> {exportResult.fileName}</p>
+                  <p><strong>Số lượng sinh viên:</strong> {exportResult.totalStudents}</p>
+                  <p style={{ marginTop: '15px' }}>
+                    <a 
+                      href={exportResult.fileUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="btn btn-primary"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <FileSpreadsheet size={18} />
+                      Tải xuống file Excel
+                    </a>
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn btn-primary" 
+                onClick={() => setExportResult(null)}
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>

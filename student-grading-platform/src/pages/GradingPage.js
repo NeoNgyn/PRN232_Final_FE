@@ -763,6 +763,40 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       setAddedCriteria(updatedAddedCriteria);
       setScores(updatedScores);
       
+      // Trigger backend to recalculate totalScore for this submission
+      if (submissionDetail?.submissionId) {
+        try {
+          const updateData = {
+            ExamId: submissionDetail.examId,
+            StudentId: submissionDetail.studentId
+          };
+          const updatedSubmission = await submissionService.updateSubmission(selectedStudent.id, updateData);
+          console.log('Submission totalScore recalculated after Add:', updatedSubmission);
+          
+          // Update submissionDetail with new totalScore
+          if (updatedSubmission?.totalScore !== undefined) {
+            setSubmissionDetail({
+              ...submissionDetail,
+              totalScore: updatedSubmission.totalScore,
+              gradingStatus: updatedSubmission.gradingStatus
+            });
+            
+            // Update submissions list to reflect new score
+            setSubmissions(submissions.map(s => 
+              s.id === selectedStudent.id 
+                ? { 
+                    ...s, 
+                    totalScore: updatedSubmission.totalScore,
+                    gradingStatus: updatedSubmission.gradingStatus
+                  }
+                : s
+            ));
+          }
+        } catch (updateError) {
+          console.error('Error recalculating totalScore:', updateError);
+        }
+      }
+      
       console.log('Grade created successfully:', response);
       console.log('Updated scores:', updatedScores);
       console.log('Current total score should be:', Object.keys(updatedAddedCriteria)
@@ -816,6 +850,40 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       setScores(updatedScores);
       setAddedCriteria(updatedAddedCriteria);
       
+      // Trigger backend to recalculate totalScore for this submission
+      if (submissionDetail?.submissionId) {
+        try {
+          const updateData = {
+            ExamId: submissionDetail.examId,
+            StudentId: submissionDetail.studentId
+          };
+          const updatedSubmission = await submissionService.updateSubmission(selectedStudent.id, updateData);
+          console.log('Submission totalScore recalculated:', updatedSubmission);
+          
+          // Update submissionDetail with new totalScore
+          if (updatedSubmission?.totalScore !== undefined) {
+            setSubmissionDetail({
+              ...submissionDetail,
+              totalScore: updatedSubmission.totalScore,
+              gradingStatus: updatedSubmission.gradingStatus
+            });
+            
+            // Update submissions list to reflect new score
+            setSubmissions(submissions.map(s => 
+              s.id === selectedStudent.id 
+                ? { 
+                    ...s, 
+                    totalScore: updatedSubmission.totalScore,
+                    gradingStatus: updatedSubmission.gradingStatus
+                  }
+                : s
+            ));
+          }
+        } catch (updateError) {
+          console.error('Error recalculating totalScore:', updateError);
+        }
+      }
+      
       console.log('Grade updated successfully');
       console.log('Updated scores:', updatedScores);
       alert('Cập nhật điểm thành công!');
@@ -860,7 +928,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
     const penalties = {
       'Keyword': 0.5,
       'LateSubmission': 1.0,
-      'Plagiarism': 3.0,
+      'Plagiarism': 10.0,
       'FileError': 0.5
     };
     return penalties[type] || 0;
@@ -1030,17 +1098,17 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   };
 
   const calculateTotalScore = () => {
-    // Calculate score for criteria that have been saved to DB (have gradeId)
+    // Calculate score for ALL criteria that have a score, regardless of whether saved to DB
     let baseScore = 0;
     activeCriteria.forEach(criteria => {
-      // Count criteria that have gradeId (saved to DB) OR have been added but not yet updated
-      if (gradeIds[criteria.id] && scores[criteria.id] !== undefined) {
-        baseScore += parseFloat(scores[criteria.id]);
+      // Count all criteria that have a score value
+      if (scores[criteria.id] !== undefined && scores[criteria.id] !== '') {
+        baseScore += parseFloat(scores[criteria.id]) || 0;
       }
     });
     
     const penalty = getTotalPenalty();
-    console.log('[calculateTotalScore] Base score:', baseScore, 'Penalty:', penalty);
+    console.log('[calculateTotalScore] Base score:', baseScore, 'Penalty:', penalty, 'Total:', baseScore - penalty);
     return Math.max(0, baseScore - penalty);
   };
 
@@ -1067,7 +1135,8 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       };
       
       // Call backend to update submission - backend will calculate TotalScore and GradingStatus automatically
-      await submissionService.updateSubmission(selectedStudent.id, updateData);
+      const updatedSubmission = await submissionService.updateSubmission(selectedStudent.id, updateData);
+      console.log('Updated submission from backend:', updatedSubmission);
 
       const gradingResult = {
         studentId: selectedStudent.studentId,
@@ -1086,14 +1155,19 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       setGradedSubmissions([...gradedSubmissions, gradingResult]);
       
       // Update submissions state to reflect graded status immediately
-      const finalScore = calculateTotalScore();
+      // Use totalScore from backend response if available
+      const finalScore = updatedSubmission?.totalScore ?? calculateTotalScore();
+      const finalStatus = updatedSubmission?.gradingStatus || (finalScore > 0 ? 'Passed' : 'Failed');
+      
+      console.log('Final score:', finalScore, 'Status:', finalStatus);
+      
       setSubmissions(submissions.map(s => 
         s.id === selectedStudent.id 
           ? { 
               ...s, 
               graded: true, 
               totalScore: finalScore,
-              gradingStatus: finalScore > 0 ? 'Passed' : 'Failed'
+              gradingStatus: finalStatus
             }
           : s
       ));

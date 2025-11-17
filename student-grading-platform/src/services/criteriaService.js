@@ -138,10 +138,10 @@ export const deleteCriteria = async (id) => {
 export const getCriteriaByExamId = async (examId) => {
   try {
     console.log('[CriteriaService] Fetching criteria for exam ID:', examId);
-    console.log('[CriteriaService] API URL:', `/api/v1/criterias/exam/${examId}`);
+    console.log('[CriteriaService] API URL:', `/api/v1/criteria/exam/${examId}`);
     
-    // Backend endpoint: /api/v1/criterias/exam/{examId} - note the 's' in criterias
-    const response = await academicAxios.get(`/api/v1/criterias/exam/${examId}`);
+    // Backend endpoint: /api/v1/criteria/exam/{examId} - note: NO 's' in criteria
+    const response = await academicAxios.get(`/api/v1/criteria/exam/${examId}`);
     const data = response.data?.data || [];
     
     console.log('[CriteriaService] Raw response:', data);

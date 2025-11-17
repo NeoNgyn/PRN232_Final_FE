@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Users, Upload, Archive, FileCheck, AlertCircle, Loader2, CheckCircle, XCircle, Settings, AlertTriangle } from 'lucide-react';
+import { LogOut, Users, Upload, Archive, FileCheck, AlertCircle, Loader2, CheckCircle, XCircle, Settings, AlertTriangle, RefreshCw } from 'lucide-react';
 import managerService from '../services/managerService';
 import ManagementPanel from './ManagementPanel';
 import ViolationManagement from './ViolationManagement';
+import RegradeManagement from './RegradeManagement';
+import ApprovalManagement from './ApprovalManagement';
 import './ManagerDashboard.css';
 
 function ManagerDashboard({ user, onLogout }) {
-  const [activeView, setActiveView] = useState('assignments'); // assignments, management, or violations
+  const [activeView, setActiveView] = useState('assignments'); // assignments, management, violations, regrade, or approval
   const [teachers, setTeachers] = useState([]);
   const [exams, setExams] = useState([]);
   const [isLoadingTeachers, setIsLoadingTeachers] = useState(true);
@@ -142,6 +144,20 @@ function ManagerDashboard({ user, onLogout }) {
               Phân công chấm bài
             </button>
             <button 
+              className={`nav-tab ${activeView === 'regrade' ? 'active' : ''}`}
+              onClick={() => setActiveView('regrade')}
+            >
+              <RefreshCw size={18} />
+              Chấm lại
+            </button>
+            <button 
+              className={`nav-tab ${activeView === 'approval' ? 'active' : ''}`}
+              onClick={() => setActiveView('approval')}
+            >
+              <CheckCircle size={18} />
+              Phê duyệt
+            </button>
+            <button 
               className={`nav-tab ${activeView === 'violations' ? 'active' : ''}`}
               onClick={() => setActiveView('violations')}
             >
@@ -170,6 +186,10 @@ function ManagerDashboard({ user, onLogout }) {
         <ManagementPanel />
       ) : activeView === 'violations' ? (
         <ViolationManagement user={user} onLogout={onLogout} />
+      ) : activeView === 'regrade' ? (
+        <RegradeManagement />
+      ) : activeView === 'approval' ? (
+        <ApprovalManagement />
       ) : (
       <div className="dashboard-content">
         <div className="content-header">

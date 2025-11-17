@@ -57,3 +57,11 @@ export const getFileUrl = async (filePath) => {
   const response = await academicAxios.get(API_ENDPOINTS.FILES.GET_FILE_URL(filePath));
   return response.data?.url || response.url;
 };
+
+// Export summary Excel for all submissions in an exam
+export const exportSummaryExcel = async (examId) => {
+  const response = await academicAxios.get(`/api/v1/files/export-summary/${examId}`);
+  
+  // Response format: { examId, exported, files: [{ SubmissionId, StudentId, Url }] }
+  return response.data;
+};

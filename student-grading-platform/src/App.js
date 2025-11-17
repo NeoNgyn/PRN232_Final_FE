@@ -4,8 +4,8 @@ import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
+import ModeratorDashboard from './pages/ModeratorDashboard';
 import GradingPage from './pages/GradingPage';
-import ViolationManagement from './pages/ViolationManagement';
 import './App.css';
 
 // Initial mock subjects
@@ -73,6 +73,8 @@ function App() {
                   <Navigate to="/admin" />
                 ) : user.role === 'manager' ? (
                   <Navigate to="/manager" />
+                ) : user.role === 'moderator' ? (
+                  <Navigate to="/moderator" />
                 ) : (
                   <Navigate to="/teacher" />
                 )
@@ -115,6 +117,19 @@ function App() {
             } 
           />
           <Route 
+            path="/moderator" 
+            element={
+              user && (user.role === 'moderator' || user.role === 'teacher') ? (
+                <ModeratorDashboard 
+                  user={user} 
+                  onLogout={handleLogout}
+                />
+              ) : (
+                <Navigate to="/" />
+              )
+            } 
+          />
+          <Route 
             path="/teacher" 
             element={
               user && user.role === 'teacher' ? (
@@ -132,7 +147,7 @@ function App() {
           <Route 
             path="/grading/:examId" 
             element={
-              user && user.role === 'teacher' ? (
+              user && (user.role === 'teacher' || user.role === 'moderator') ? (
                 <GradingPage 
                   user={user} 
                   onLogout={handleLogout}
@@ -148,7 +163,7 @@ function App() {
           <Route 
             path="/grading/:examId/submission/:submissionId" 
             element={
-              user && user.role === 'teacher' ? (
+              user && (user.role === 'teacher' || user.role === 'moderator') ? (
                 <GradingPage 
                   user={user} 
                   onLogout={handleLogout}
