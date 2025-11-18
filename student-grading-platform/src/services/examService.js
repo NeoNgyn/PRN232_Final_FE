@@ -30,14 +30,20 @@ const examService = {
       const response = await academicAxios.get(API_ENDPOINTS.EXAMS.GET_BY_ID(id));
       const exam = response.data?.data;
       if (!exam) return null;
+      
+      console.log('Exam from backend:', exam); // Debug log
+      
       return {
         id: exam.examId,
-        subjectId: response.subjectId,
-        semesterId: response.semesterId,
-        examName: response.examName,
-        examType: response.examType,
-        createdAt: response.createdAt,
-        _original: response
+        subjectId: exam.subjectId,
+        semesterId: exam.semesterId,
+        examName: exam.examName,
+        examType: exam.examType,
+        createdAt: exam.createdAt,
+        // Include nested objects if available
+        subject: exam.subject,
+        semester: exam.semester,
+        _original: exam
       };
     } catch (error) {
       console.error('Error fetching exam:', error);
@@ -61,12 +67,14 @@ const examService = {
       // Map response back to UI format
       return {
         id: exam.examId,
-        subjectId: response.subjectId,
-        semesterId: response.semesterId,
-        examName: response.examName,
-        examType: response.examType,
-        createdAt: response.createdAt,
-        _original: response
+        subjectId: exam.subjectId,
+        semesterId: exam.semesterId,
+        examName: exam.examName,
+        examType: exam.examType,
+        createdAt: exam.createdAt,
+        subject: exam.subject,
+        semester: exam.semester,
+        _original: exam
       };
     } catch (error) {
       console.error('Error creating exam:', error);
@@ -96,12 +104,14 @@ const examService = {
       // Map response back to UI format
       return {
         id: exam.examId,
-        subjectId: response.subjectId,
-        semesterId: response.semesterId,
-        examName: response.examName,
-        examType: response.examType,
-        createdAt: response.createdAt,
-        _original: response
+        subjectId: exam.subjectId,
+        semesterId: exam.semesterId,
+        examName: exam.examName,
+        examType: exam.examType,
+        createdAt: exam.createdAt,
+        subject: exam.subject,
+        semester: exam.semester,
+        _original: exam
       };
     } catch (error) {
       console.error('Error updating exam:', error);

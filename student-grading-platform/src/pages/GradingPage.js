@@ -926,7 +926,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
   // Violation penalty mapping
   const getPenaltyByType = (type) => {
     const penalties = {
-      'Keyword': 0.5,
+      'Keyword': 0.5,       
       'LateSubmission': 1.0,
       'Plagiarism': 10.0,
       'FileError': 0.5
@@ -1137,27 +1137,33 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       // Call backend to update submission - backend will calculate TotalScore and GradingStatus automatically
       const updatedSubmission = await submissionService.updateSubmission(selectedStudent.id, updateData);
       console.log('Updated submission from backend:', updatedSubmission);
+      
+      // Keep existing exam object if backend returns null
+      if (updatedSubmission?.data) {
+        updatedSubmission.data.exam = updatedSubmission.data.exam || submissionDetail?.exam || exam;
+      }
 
       const gradingResult = {
         studentId: selectedStudent.studentId,
         studentName: selectedStudent.studentName,
         subject: subject?.code || 'N/A',
-        semester: exam.semester,
-        examType: exam.type,
+        semester: exam?.semester || 'N/A',
+        examType: exam?.type || 'N/A',
         password: selectedStudent.password,
         scores: { ...scores },
         notes: { ...notes },
         totalScore: calculateTotalScore(),
         gradedAt: new Date().toLocaleString('vi-VN'),
-        gradedBy: user.name,
+        gradedBy: user?.name || 'Unknown',
       };
 
       setGradedSubmissions([...gradedSubmissions, gradingResult]);
       
       // Update submissions state to reflect graded status immediately
       // Use totalScore from backend response if available
-      const finalScore = updatedSubmission?.totalScore ?? calculateTotalScore();
-      const finalStatus = updatedSubmission?.gradingStatus || (finalScore > 0 ? 'Passed' : 'Failed');
+      const backendData = updatedSubmission?.data || updatedSubmission;
+      const finalScore = backendData?.totalScore ?? calculateTotalScore();
+      const finalStatus = backendData?.gradingStatus || (finalScore > 0 ? 'Passed' : 'Failed');
       
       console.log('Final score:', finalScore, 'Status:', finalStatus);
       
@@ -1173,19 +1179,21 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
       ));
       
       // Update student as graded in the exams state
-      setExams(exams.map(e => {
-        if (e.id === exam.id) {
-          return {
-            ...e,
-            students: e.students.map(s => 
+      if (exam?.id) {
+        setExams(exams.map(e => {
+          if (e.id === exam.id) {
+            return {
+              ...e,
+              students: e.students?.map(s => 
               s.id === selectedStudent.id 
                 ? { ...s, graded: true, totalScore: finalScore }
                 : s
-            )
+            ) || []
           };
         }
         return e;
-      }));
+        }));
+      }
       
       setShowSuccess(true);
       
@@ -1237,10 +1245,10 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
         </button>
         <div className="header-info">
           <h1>
-            {exam?.subject?.subjectCode || subject?.code || 'N/A'} - {exam?.subject?.subjectName || subject?.name || ''}
+            {subject?.code || exam?.subject?.subjectCode || 'N/A'} - {subject?.name || exam?.subject?.subjectName || ''}
           </h1>
           <p>
-            {exam?.examName || exam?.semester || 'N/A'} ({exam?.examType || exam?.type || 'N/A'})
+            {exam?.examName || 'N/A'} ({exam?.examType || 'N/A'})
             {exam?.semester?.semesterName && ` - ${exam.semester.semesterName}`}
           </p>
         </div>
