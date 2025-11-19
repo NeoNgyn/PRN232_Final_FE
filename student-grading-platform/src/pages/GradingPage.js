@@ -1427,7 +1427,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   <div className="detail-row">
                     <span className="detail-label">Tên kỳ thi:</span>
                     <span className="detail-value">
-                      {submissionDetail?.exam?.examName || exam.semester}
+                      {submissionDetail?.exam?.examName || exam.examName || 'N/A'}
                     </span>
                   </div>
                   <div className="detail-row">
@@ -1439,7 +1439,7 @@ function GradingPage({ user, onLogout, exams, setExams, subjects }) {
                   <div className="detail-row">
                     <span className="detail-label">Kỳ học:</span>
                     <span className="detail-value">
-                      {submissionDetail?.exam?.semester?.semesterCode || exam.semester} 
+                      {submissionDetail?.exam?.semester?.semesterCode || exam.semester?.semesterCode || 'N/A'} 
                       {submissionDetail?.exam?.semester?.semesterName && ` - ${submissionDetail.exam.semester.semesterName}`}
                     </span>
                   </div>

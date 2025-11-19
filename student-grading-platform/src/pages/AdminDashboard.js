@@ -417,20 +417,36 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
       const response = await fileService.importCriteria(file, selectedExam.id);
 
       console.log('Import criteria API response:', response);
+      console.log('Full response structure:', JSON.stringify(response, null, 2));
 
-      // Extract data from response - backend returns { data: { criterias: [...], importedCount: N } }
-      const responseData = response.data || response;
-      const criteriasList = responseData.criterias || [];
-      const importedCount = responseData.importedCount || criteriasList.length;
+      // Backend returns: { data: { message, importedCount, criterias: [...] } }
+      // Extract nested data correctly
+      const responseData = response?.data?.data || response?.data || response;
+      console.log('Extracted responseData:', responseData);
+      
+      const criteriasList = responseData?.criterias || [];
+      const importedCount = responseData?.importedCount || criteriasList.length;
+      
+      console.log('Criterias list:', criteriasList);
+      console.log('Imported count:', importedCount);
+
+      if (!criteriasList || criteriasList.length === 0) {
+        alert('⚠️ Không tìm thấy tiêu chí nào trong file Excel!\n\nVui lòng kiểm tra lại format file.');
+        setIsUploadingCriteria(false);
+        e.target.value = '';
+        return;
+      }
 
       // Map API response to UI format
       const importedCriteria = criteriasList.map((c, index) => ({
-        id: c.criteriaId || index + 1,
+        id: c.criteriaId || c.id || index + 1,
         order: c.sortOrder || index + 1,
-        name: c.criteriaName,
+        name: c.criteriaName || c.name,
         maxScore: c.maxScore,
         description: c.description || ''
       }));
+
+      console.log('Mapped importedCriteria:', importedCriteria);
 
       // Update exam with imported criteria
       const updatedExams = exams.map(exam => 
@@ -441,8 +457,11 @@ function AdminDashboard({ user, onLogout, subjects, setSubjects, exams, setExams
       
       setExams(updatedExams);
 
-      // Success alert
-      const criteriaList = importedCriteria.map(c => `  • ${c.name}: ${c.maxScore} điểm`).join('\n');
+      // Success alert with better formatting
+      const criteriaList = importedCriteria.length > 0 
+        ? importedCriteria.map(c => `  • ${c.name}: ${c.maxScore} điểm`).join('\n')
+        : '  (Không có tiêu chí nào)';
+      
       alert(`✓ Đã import thành công ${importedCount} tiêu chí!\n\nCác tiêu chí:\n${criteriaList}`);
       
       setShowCriteriaModal(false);

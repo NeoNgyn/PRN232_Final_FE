@@ -260,14 +260,6 @@ function TeacherDashboard({ user, onLogout }) {
               const examSubmissions = submissions[exam.id] || [];
               const submittedStudents = examSubmissions.length;
               const gradedStudents = examSubmissions.filter(s => s.gradingStatus === 'Passed' || s.gradingStatus === 'Failed').length;
-              
-              // Calculate average score for graded submissions
-              const gradedScores = examSubmissions
-                .filter(s => s.totalScore !== null && s.totalScore !== undefined && (s.gradingStatus === 'Passed' || s.gradingStatus === 'Failed'))
-                .map(s => s.totalScore);
-              const averageScore = gradedScores.length > 0 
-                ? (gradedScores.reduce((sum, score) => sum + score, 0) / gradedScores.length).toFixed(2)
-                : 'N/A';
             
               return (
                 <div key={exam.id} className="exam-card">
@@ -279,54 +271,45 @@ function TeacherDashboard({ user, onLogout }) {
                   <div className="exam-body">
                     <h3>{subject?.code || 'N/A'}</h3>
                     <p className="exam-name">{subject?.name || exam.examName}</p>
-                    <p className="exam-slot" style={{ fontSize: '14px', color: '#666', marginTop: '4px' }}>
-                      {new Date(exam.createdAt).toLocaleDateString('vi-VN')}
+                    <p className="exam-date">
+                      Ngày tạo: {new Date(exam.createdAt).toLocaleDateString('vi-VN')}
                     </p>
                     
-                    <div className="exam-stats">
-                      <div className="stat-item">
-                        <span className="stat-label">Kỳ thi:</span>
-                        <span className="stat-value">{exam.examName}</span>
+                    <div className="exam-info-box">
+                      <div className="info-row">
+                        <span className="info-label">Kỳ thi:</span>
+                        <span className="info-value">{exam.examName}</span>
                       </div>
-                    <div className="stat-item">
-                      <span className="stat-label">Bài nộp:</span>
-                      <span className="stat-value">{submittedStudents} bài</span>
+                      <div className="info-divider"></div>
+                      <div className="info-row">
+                        <span className="info-label">Đã chấm:</span>
+                        <span className="info-value">{gradedStudents}/{submittedStudents} bài</span>
+                      </div>
                     </div>
-                    <div className="stat-item">
-                      <span className="stat-label">Đã chấm:</span>
-                      <span className="stat-value">{gradedStudents} bài</span>
-                    </div>
-                    <div className="stat-item">
-                      <span className="stat-label">Điểm TB:</span>
-                      <span className="stat-value" style={{ color: averageScore !== 'N/A' ? '#4CAF50' : '#999', fontWeight: 'bold' }}>
-                        {averageScore !== 'N/A' ? `${averageScore} điểm` : 'Chưa có'}
-                      </span>
+
+                    <div className="progress-section">
+                      <div className="progress-header">
+                        <span>Tiến độ chấm bài</span>
+                        <span className="progress-percent">{progress}%</span>
+                      </div>
+                      <div className="progress-bar">
+                        <div 
+                          className="progress-fill" 
+                          style={{ width: `${progress}%` }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="progress-section">
-                    <div className="progress-header">
-                      <span>Tiến độ chấm bài</span>
-                      <span className="progress-percent">{progress}%</span>
-                    </div>
-                    <div className="progress-bar">
-                      <div 
-                        className="progress-fill" 
-                        style={{ width: `${progress}%` }}
-                      ></div>
-                    </div>
+                  <div className="exam-footer">
+                    <button
+                      onClick={() => handleStartGrading(exam.id)}
+                      className="btn btn-primary btn-grade"
+                    >
+                      <ClipboardList size={18} />
+                      Vào chấm bài
+                    </button>
                   </div>
-                </div>
-
-                <div className="exam-footer">
-                  <button
-                    onClick={() => handleStartGrading(exam.id)}
-                    className="btn btn-primary btn-grade"
-                  >
-                    <ClipboardList size={18} />
-                    Vào chấm bài
-                  </button>
-                </div>
               </div>
               );
             })
