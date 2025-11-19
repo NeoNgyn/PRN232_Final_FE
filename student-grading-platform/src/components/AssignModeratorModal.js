@@ -23,10 +23,10 @@ function AssignModeratorModal({ submission, onClose, onSuccess }) {
     setIsLoadingModerators(true);
     setError(null);
     try {
-      // Get all teachers/moderators from identity service
-      const teachers = await managerService.getAllTeachers();
-      console.log('Fetched teachers/moderators:', teachers);
-      setModerators(teachers);
+      // Get moderators (users with Moderator role) from identity service
+      const moderators = await managerService.getAllModerators();
+      console.log('Fetched moderators:', moderators);
+      setModerators(moderators);
     } catch (err) {
       setError('Không thể tải danh sách moderator.');
       console.error('Error fetching moderators:', err);

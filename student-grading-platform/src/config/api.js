@@ -16,6 +16,7 @@ export const API_ENDPOINTS = {
   USERS: {
     GET_ALL: `${IDENTITY_SERVICE_URL}/api/v1/users`,
     GET_TEACHERS: `${IDENTITY_SERVICE_URL}/api/v1/users/teachers`,
+    GET_MODERATORS: `${IDENTITY_SERVICE_URL}/api/v1/users/moderators`,
     GET_BY_ID: (id) => `${IDENTITY_SERVICE_URL}/api/v1/users/${id}`,
     CREATE: `${IDENTITY_SERVICE_URL}/api/v1/users`,
     UPDATE: (id) => `${IDENTITY_SERVICE_URL}/api/v1/users/${id}`,

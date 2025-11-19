@@ -35,6 +35,38 @@ const managerService = {
   },
 
   /**
+   * Get all moderators
+   */
+  getAllModerators: async () => {
+    try {
+      const response = await identityAxios.get(API_ENDPOINTS.USERS.GET_MODERATORS);
+      console.log('Raw moderators response:', response.data);
+      
+      // Backend returns { success, message, data }
+      if (response.data && response.data.data) {
+        const moderators = response.data.data;
+        
+        // Map UserResponse to UI format
+        return moderators.map(moderator => ({
+          id: moderator.UserId || moderator.userId,
+          userId: moderator.UserId || moderator.userId,
+          name: moderator.Name || moderator.name || moderator.Email || moderator.email,
+          fullName: moderator.Name || moderator.name || moderator.Email || moderator.email,
+          email: moderator.Email || moderator.email,
+          lecturerCode: moderator.LecturerCode || moderator.lecturerCode || 'N/A',
+          roleId: moderator.RoleId || moderator.roleId,
+          isActive: moderator.IsActive ?? moderator.isActive,
+          _original: moderator
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching moderators:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Upload RAR file and assign to examiner
    * @param {File} rarFile - The RAR file containing student submissions
    * @param {string} examId - The exam ID (GUID)
